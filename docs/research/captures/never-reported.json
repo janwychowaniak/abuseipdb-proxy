@@ -1,0 +1,38 @@
+{
+  "captured_at": "2026-08-10T16:11:07+00:00",
+  "request": {
+    "method": "GET",
+    "url": "https://api.abuseipdb.com/api/v2/check",
+    "params": {
+      "ipAddress": "194.177.32.5"
+    },
+    "auth": "valid key (redacted)"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json",
+      "X-RateLimit-Limit": "1000",
+      "X-RateLimit-Remaining": "972",
+      "X-RateLimit-Reset": "1786406400"
+    },
+    "body": {
+      "data": {
+        "ipAddress": "194.177.32.5",
+        "isPublic": true,
+        "ipVersion": 4,
+        "isWhitelisted": false,
+        "abuseConfidenceScore": 0,
+        "countryCode": "FR",
+        "usageType": "Data Center/Web Hosting/Transit",
+        "isp": "ADISTA SAS",
+        "domain": "adista.fr",
+        "hostnames": [],
+        "isTor": false,
+        "totalReports": 0,
+        "numDistinctUsers": 0,
+        "lastReportedAt": null
+      }
+    }
+  }
+}

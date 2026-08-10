@@ -1,0 +1,41 @@
+{
+  "captured_at": "2026-08-10T16:11:09+00:00",
+  "request": {
+    "method": "GET",
+    "url": "https://api.abuseipdb.com/api/v2/check",
+    "params": {
+      "ipAddress": "185.220.101.34",
+      "maxAgeInDays": 30
+    },
+    "auth": "valid key (redacted)"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json",
+      "X-RateLimit-Limit": "1000",
+      "X-RateLimit-Remaining": "969",
+      "X-RateLimit-Reset": "1786406400"
+    },
+    "body": {
+      "data": {
+        "ipAddress": "185.220.101.34",
+        "isPublic": true,
+        "ipVersion": 4,
+        "isWhitelisted": false,
+        "abuseConfidenceScore": 100,
+        "countryCode": "DE",
+        "usageType": "Fixed Line ISP",
+        "isp": "Network for Tor-Exit traffic.",
+        "domain": "for-privacy.net",
+        "hostnames": [
+          "tor-exit-34.for-privacy.net"
+        ],
+        "isTor": true,
+        "totalReports": 40,
+        "numDistinctUsers": 22,
+        "lastReportedAt": "2026-08-10T15:00:18+00:00"
+      }
+    }
+  }
+}

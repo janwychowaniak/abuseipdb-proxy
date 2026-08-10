@@ -1,0 +1,41 @@
+{
+  "captured_at": "2026-08-10T16:11:52+00:00",
+  "request": {
+    "method": "GET",
+    "url": "https://api.abuseipdb.com/api/v2/check",
+    "params": {
+      "ipAddress": "87.98.154.146",
+      "maxAgeInDays": 365
+    },
+    "auth": "valid key (redacted)"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json",
+      "X-RateLimit-Limit": "1000",
+      "X-RateLimit-Remaining": "964",
+      "X-RateLimit-Reset": "1786406400"
+    },
+    "body": {
+      "data": {
+        "ipAddress": "87.98.154.146",
+        "isPublic": true,
+        "ipVersion": 4,
+        "isWhitelisted": false,
+        "abuseConfidenceScore": 30,
+        "countryCode": "FR",
+        "usageType": "Content Delivery Network",
+        "isp": "OVH SAS",
+        "domain": "ovh.net",
+        "hostnames": [
+          "cluster026.hosting.ovh.net"
+        ],
+        "isTor": false,
+        "totalReports": 31,
+        "numDistinctUsers": 15,
+        "lastReportedAt": "2026-08-03T13:57:23+00:00"
+      }
+    }
+  }
+}

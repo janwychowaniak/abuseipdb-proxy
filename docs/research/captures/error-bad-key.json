@@ -1,0 +1,25 @@
+{
+  "captured_at": "2026-08-10T16:08:26+00:00",
+  "request": {
+    "method": "GET",
+    "url": "https://api.abuseipdb.com/api/v2/check",
+    "params": {
+      "ipAddress": "8.8.8.8"
+    },
+    "auth": "invalid key (401 probe)"
+  },
+  "response": {
+    "status": 401,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "errors": [
+        {
+          "detail": "Authentication failed. Your API key is either missing, incorrect, or revoked. Note: The APIv2 key differs from the APIv1 key.",
+          "status": 401
+        }
+      ]
+    }
+  }
+}

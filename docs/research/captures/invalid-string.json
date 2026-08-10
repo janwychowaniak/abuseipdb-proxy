@@ -1,0 +1,31 @@
+{
+  "captured_at": "2026-08-10T16:08:26+00:00",
+  "request": {
+    "method": "GET",
+    "url": "https://api.abuseipdb.com/api/v2/check",
+    "params": {
+      "ipAddress": "not-an-ip"
+    },
+    "auth": "valid key (redacted)"
+  },
+  "response": {
+    "status": 422,
+    "headers": {
+      "Content-Type": "application/json",
+      "X-RateLimit-Limit": "1000",
+      "X-RateLimit-Remaining": "974",
+      "X-RateLimit-Reset": "1786406400"
+    },
+    "body": {
+      "errors": [
+        {
+          "detail": "The ip address must be a valid IPv4 or IPv6 address (e.g. 8.8.8.8 or 2001:4860:4860::8888).",
+          "status": 422,
+          "source": {
+            "parameter": "ipAddress"
+          }
+        }
+      ]
+    }
+  }
+}

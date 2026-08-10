@@ -1,0 +1,27 @@
+{
+  "_provenance": "RECONSTRUCTED from official AbuseIPDB APIv2 docs on 2026-08-10 — NOT a live capture. Capturing a real 429 would require burning the full 1000/day quota. Field shapes follow the documented rate-limit example; replace with a live capture if the limit is ever hit naturally.",
+  "request": {
+    "method": "GET",
+    "url": "https://api.abuseipdb.com/api/v2/check",
+    "params": { "ipAddress": "8.8.8.8" },
+    "auth": "valid key (redacted)"
+  },
+  "response": {
+    "status": 429,
+    "headers": {
+      "Content-Type": "application/json",
+      "X-RateLimit-Limit": "1000",
+      "X-RateLimit-Remaining": "0",
+      "X-RateLimit-Reset": "1786406400",
+      "Retry-After": "28800"
+    },
+    "body": {
+      "errors": [
+        {
+          "detail": "Daily rate limit of 1000 requests exceeded for this endpoint. See headers for additional details.",
+          "status": 429
+        }
+      ]
+    }
+  }
+}

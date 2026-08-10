@@ -1,0 +1,478 @@
+{
+  "captured_at": "2026-08-10T16:11:11+00:00",
+  "request": {
+    "method": "GET",
+    "url": "https://api.abuseipdb.com/api/v2/check",
+    "params": {
+      "ipAddress": "185.220.101.34",
+      "maxAgeInDays": 30,
+      "verbose": ""
+    },
+    "auth": "valid key (redacted)"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json",
+      "X-RateLimit-Limit": "1000",
+      "X-RateLimit-Remaining": "966",
+      "X-RateLimit-Reset": "1786406400"
+    },
+    "body": {
+      "data": {
+        "ipAddress": "185.220.101.34",
+        "isPublic": true,
+        "ipVersion": 4,
+        "isWhitelisted": false,
+        "abuseConfidenceScore": 100,
+        "countryCode": "DE",
+        "usageType": "Fixed Line ISP",
+        "isp": "Network for Tor-Exit traffic.",
+        "domain": "for-privacy.net",
+        "hostnames": [
+          "tor-exit-34.for-privacy.net"
+        ],
+        "isTor": true,
+        "countryName": "Germany",
+        "totalReports": 40,
+        "numDistinctUsers": 22,
+        "lastReportedAt": "2026-08-10T15:00:18+00:00",
+        "reports": [
+          {
+            "reportedAt": "2026-08-10T14:29:21+00:00",
+            "comment": "CrowdSec blocked: ssh:bruteforce detected via OPNsense firewall",
+            "categories": [
+              15,
+              21
+            ],
+            "reporterId": 247970,
+            "reporterCountryCode": "TR",
+            "reporterCountryName": "Turkey"
+          },
+          {
+            "reportedAt": "2026-08-09T20:18:26+00:00",
+            "comment": "[Invisible Captcha] Potential spam detected for IP 185.220.101.34. Timestamp threshold not reached (took 3s).",
+            "categories": [
+              21
+            ],
+            "reporterId": 97213,
+            "reporterCountryCode": "DE",
+            "reporterCountryName": "Germany"
+          },
+          {
+            "reportedAt": "2026-08-09T08:29:21+00:00",
+            "comment": "CrowdSec blocked: ssh:bruteforce detected via OPNsense firewall",
+            "categories": [
+              15,
+              21
+            ],
+            "reporterId": 247970,
+            "reporterCountryCode": "TR",
+            "reporterCountryName": "Turkey"
+          },
+          {
+            "reportedAt": "2026-08-08T02:29:21+00:00",
+            "comment": "CrowdSec blocked: ssh:bruteforce detected via OPNsense firewall",
+            "categories": [
+              15,
+              21
+            ],
+            "reporterId": 247970,
+            "reporterCountryCode": "TR",
+            "reporterCountryName": "Turkey"
+          },
+          {
+            "reportedAt": "2026-08-07T20:20:26+00:00",
+            "comment": "[DDoS Attacker] This IP was attacking website as219123.guru and sent 400 requests on port 443",
+            "categories": [
+              4,
+              21
+            ],
+            "reporterId": 300163,
+            "reporterCountryCode": "DE",
+            "reporterCountryName": "Germany"
+          },
+          {
+            "reportedAt": "2026-08-07T11:47:39+00:00",
+            "comment": "Form spam",
+            "categories": [
+              10
+            ],
+            "reporterId": 86372,
+            "reporterCountryCode": "US",
+            "reporterCountryName": "United States of America"
+          },
+          {
+            "reportedAt": "2026-08-07T01:37:17+00:00",
+            "comment": "CrowdSec blocked: ssh:bruteforce detected via OPNsense firewall",
+            "categories": [
+              15,
+              21
+            ],
+            "reporterId": 247970,
+            "reporterCountryCode": "TR",
+            "reporterCountryName": "Turkey"
+          },
+          {
+            "reportedAt": "2026-08-06T17:40:44+00:00",
+            "comment": "Looking for CMS/PHP/SQL vulnerablilities/excessive crawling - 24",
+            "categories": [
+              20,
+              21
+            ],
+            "reporterId": 46220,
+            "reporterCountryCode": "DE",
+            "reporterCountryName": "Germany"
+          },
+          {
+            "reportedAt": "2026-08-05T20:29:42+00:00",
+            "comment": "CrowdSec blocked: ssh:bruteforce detected via OPNsense firewall",
+            "categories": [
+              15,
+              21
+            ],
+            "reporterId": 247970,
+            "reporterCountryCode": "TR",
+            "reporterCountryName": "Turkey"
+          },
+          {
+            "reportedAt": "2026-08-04T14:29:42+00:00",
+            "comment": "CrowdSec blocked: ssh:bruteforce detected via OPNsense firewall",
+            "categories": [
+              15,
+              21
+            ],
+            "reporterId": 247970,
+            "reporterCountryCode": "TR",
+            "reporterCountryName": "Turkey"
+          },
+          {
+            "reportedAt": "2026-08-04T01:10:56+00:00",
+            "comment": "SSH brute-force attempt from 185.220.101.34 blocked by Houston-Xeon-Dartnode. 2026-08-04T01:10:45.101006+00:00 texas.dartnode.com sshd[1157798]: Connection from 185.220.101.34 port 13869 on 166.0.192.166 port 22 rdomain \"\"\n2026-08-04T01:10:46.822728+00:00 texas.dartnode.com sshd[1157798]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=185.220.101.34  user=root\n2026-08-04T01:10:48.684795+00:00 texas.dartnode.com sshd[1157798]: Failed password for root from 185.220.101.34 port 13869 ssh2",
+            "categories": [
+              18,
+              22
+            ],
+            "reporterId": 245208,
+            "reporterCountryCode": "US",
+            "reporterCountryName": "United States of America"
+          },
+          {
+            "reportedAt": "2026-08-03T13:10:18+00:00",
+            "comment": "Blocked by UFW (TCP on 47906)\nSource port: 27087\nTTL: 47\nPacket length: 60\nTOS: 0x08\n\nThis report (for 185.220.101.34) was generated by:\nhttps://github.com/sefinek/UFW-AbuseIPDB-Reporter",
+            "categories": [
+              14
+            ],
+            "reporterId": 209271,
+            "reporterCountryCode": "US",
+            "reporterCountryName": "United States of America"
+          },
+          {
+            "reportedAt": "2026-08-03T08:29:42+00:00",
+            "comment": "CrowdSec blocked: ssh:bruteforce detected via OPNsense firewall",
+            "categories": [
+              15,
+              21
+            ],
+            "reporterId": 247970,
+            "reporterCountryCode": "TR",
+            "reporterCountryName": "Turkey"
+          },
+          {
+            "reportedAt": "2026-08-02T10:27:13+00:00",
+            "comment": "Looking for CMS/PHP/SQL vulnerablilities/excessive crawling - 124",
+            "categories": [
+              20,
+              21
+            ],
+            "reporterId": 46220,
+            "reporterCountryCode": "DE",
+            "reporterCountryName": "Germany"
+          },
+          {
+            "reportedAt": "2026-08-02T02:16:22+00:00",
+            "comment": "CrowdSec blocked: ssh:bruteforce detected via OPNsense firewall",
+            "categories": [
+              15,
+              21
+            ],
+            "reporterId": 247970,
+            "reporterCountryCode": "TR",
+            "reporterCountryName": "Turkey"
+          },
+          {
+            "reportedAt": "2026-07-31T19:06:19+00:00",
+            "comment": "CrowdSec blocked: ssh:bruteforce detected via OPNsense firewall",
+            "categories": [
+              15,
+              21
+            ],
+            "reporterId": 247970,
+            "reporterCountryCode": "TR",
+            "reporterCountryName": "Turkey"
+          },
+          {
+            "reportedAt": "2026-07-31T16:25:34+00:00",
+            "comment": "Repeated wp-login/xmlrpc attempts",
+            "categories": [
+              18,
+              22
+            ],
+            "reporterId": 190396,
+            "reporterCountryCode": "NL",
+            "reporterCountryName": "Netherlands"
+          },
+          {
+            "reportedAt": "2026-07-31T05:02:12+00:00",
+            "comment": "[Fri Jul 31 01:02:04.548156 2026] [security2:error] [pid 42122:tid 42163] [client 185.220.101.34:34489] ModSecurity: Access denied with code 403 (phase 2). Operator GE matched 5 at TX:blocking_inbound_anomaly_score. [file \"/etc/httpd/modsecurity.d/activated_rules/REQUEST-949-BLOCKING-EVALUATION.conf\"] [line \"233\"] [id \"949110\"] [msg \"Inbound Anomaly Score Exceeded (Total Score: 23)\"] [ver \"OWASP_CRS/4.15.0\"] [tag \"anomaly-evaluation\"] [tag \"OWASP_CRS\"] [hostname \"73.88.79.72\"] [uri \"/lang/config.all.php\"] [unique_id \"amwsTBgOpSEFHCUtF1_bBwAAAQ0\"], referer: https://73.88.79.72/lang/config.all.php?\n...",
+            "categories": [
+              21
+            ],
+            "reporterId": 259338,
+            "reporterCountryCode": "US",
+            "reporterCountryName": "United States of America"
+          },
+          {
+            "reportedAt": "2026-07-31T02:08:46+00:00",
+            "comment": "Web attack/malicious scanning detected",
+            "categories": [
+              21
+            ],
+            "reporterId": 269267,
+            "reporterCountryCode": "GB",
+            "reporterCountryName": "United Kingdom of Great Britain and Northern Ireland"
+          },
+          {
+            "reportedAt": "2026-07-30T13:06:18+00:00",
+            "comment": "CrowdSec blocked: ssh:bruteforce detected via OPNsense firewall",
+            "categories": [
+              15,
+              21
+            ],
+            "reporterId": 247970,
+            "reporterCountryCode": "TR",
+            "reporterCountryName": "Turkey"
+          },
+          {
+            "reportedAt": "2026-07-29T11:15:47+00:00",
+            "comment": "(XMLRPC) WP XMLPRC Attack 185.220.101.34 (DE/Germany/tor-exit-34.for-privacy.net): 5 in the last 3600 secs; Ports: *; Direction: inout; Trigger: LF_CUSTOMTRIGGER",
+            "categories": [
+              18
+            ],
+            "reporterId": 90116,
+            "reporterCountryCode": "NL",
+            "reporterCountryName": "Netherlands"
+          },
+          {
+            "reportedAt": "2026-07-29T02:19:38+00:00",
+            "comment": "CrowdSec blocked: ssh:bruteforce detected via OPNsense firewall",
+            "categories": [
+              15,
+              21
+            ],
+            "reporterId": 247970,
+            "reporterCountryCode": "TR",
+            "reporterCountryName": "Turkey"
+          },
+          {
+            "reportedAt": "2026-07-28T17:01:17+00:00",
+            "comment": "SSH brute force attempt. User: root, Pass: [REDACTED]",
+            "categories": [
+              18,
+              22
+            ],
+            "reporterId": 283900,
+            "reporterCountryCode": "JP",
+            "reporterCountryName": "Japan"
+          },
+          {
+            "reportedAt": "2026-07-28T08:41:21+00:00",
+            "comment": "SSH Brute-Force Attempt",
+            "categories": [
+              18,
+              22
+            ],
+            "reporterId": 177677,
+            "reporterCountryCode": "DE",
+            "reporterCountryName": "Germany"
+          },
+          {
+            "reportedAt": "2026-07-28T05:00:57+00:00",
+            "comment": "...",
+            "categories": [
+              18,
+              22
+            ],
+            "reporterId": 38983,
+            "reporterCountryCode": "DE",
+            "reporterCountryName": "Germany"
+          },
+          {
+            "reportedAt": "2026-07-28T02:19:38+00:00",
+            "comment": "CrowdSec blocked: ssh:bruteforce detected via OPNsense firewall",
+            "categories": [
+              15,
+              21
+            ],
+            "reporterId": 247970,
+            "reporterCountryCode": "TR",
+            "reporterCountryName": "Turkey"
+          },
+          {
+            "reportedAt": "2026-07-27T19:03:16+00:00",
+            "comment": "Failed password for admin from 185.220.101.34 port 17825 ssh2\nFailed password for user from 185.220.101.34 port 17833 ssh2",
+            "categories": [
+              22
+            ],
+            "reporterId": 272645,
+            "reporterCountryCode": "PL",
+            "reporterCountryName": "Poland"
+          },
+          {
+            "reportedAt": "2026-07-27T18:41:16+00:00",
+            "comment": "WordPress hacking/exploits/scanning",
+            "categories": [
+              10,
+              15,
+              18,
+              20,
+              21
+            ],
+            "reporterId": 36200,
+            "reporterCountryCode": "DE",
+            "reporterCountryName": "Germany"
+          },
+          {
+            "reportedAt": "2026-07-27T00:20:17+00:00",
+            "comment": "Blocked by UFW (TCP on 50000)\nSource port: 7819\nTTL: 47\nPacket length: 60\nTOS: 0x08\n\nThis report (for 185.220.101.34) was generated by:\nhttps://github.com/sefinek/UFW-AbuseIPDB-Reporter",
+            "categories": [
+              14
+            ],
+            "reporterId": 209271,
+            "reporterCountryCode": "US",
+            "reporterCountryName": "United States of America"
+          },
+          {
+            "reportedAt": "2026-07-26T19:50:50+00:00",
+            "comment": "CrowdSec blocked: ssh:bruteforce detected via OPNsense firewall",
+            "categories": [
+              15,
+              21
+            ],
+            "reporterId": 247970,
+            "reporterCountryCode": "TR",
+            "reporterCountryName": "Turkey"
+          },
+          {
+            "reportedAt": "2026-07-24T15:30:03+00:00",
+            "comment": "CrowdSec blocked: ssh:bruteforce detected via OPNsense firewall",
+            "categories": [
+              15,
+              21
+            ],
+            "reporterId": 247970,
+            "reporterCountryCode": "TR",
+            "reporterCountryName": "Turkey"
+          },
+          {
+            "reportedAt": "2026-07-24T00:53:37+00:00",
+            "comment": "Blocked by UFW (TCP on 35918)\nSource port: 3173\nTTL: 47\nPacket length: 60\nTOS: 0x08\n\nThis report (for 185.220.101.34) was generated by:\nhttps://github.com/sefinek/UFW-AbuseIPDB-Reporter",
+            "categories": [
+              14
+            ],
+            "reporterId": 209271,
+            "reporterCountryCode": "US",
+            "reporterCountryName": "United States of America"
+          },
+          {
+            "reportedAt": "2026-07-19T18:31:41+00:00",
+            "comment": "http:scan",
+            "categories": [
+              18,
+              21
+            ],
+            "reporterId": 168032,
+            "reporterCountryCode": "SE",
+            "reporterCountryName": "Sweden"
+          },
+          {
+            "reportedAt": "2026-07-19T06:49:08+00:00",
+            "comment": "07/19/2026-06:49:08.178076 185.220.101.34 Protocol: 6 ET TOR Known Tor Exit Node Traffic group 46",
+            "categories": [
+              15
+            ],
+            "reporterId": 41822,
+            "reporterCountryCode": "AL",
+            "reporterCountryName": "Albania"
+          },
+          {
+            "reportedAt": "2026-07-17T22:49:37+00:00",
+            "comment": "Blocked by UFW (TCP on 6883)\nSource port: 38389\nTTL: 46\nPacket length: 60\nTOS: 0x08\n\nThis report (for 185.220.101.34) was generated by:\nhttps://github.com/sefinek/UFW-AbuseIPDB-Reporter",
+            "categories": [
+              14
+            ],
+            "reporterId": 209271,
+            "reporterCountryCode": "US",
+            "reporterCountryName": "United States of America"
+          },
+          {
+            "reportedAt": "2026-07-17T18:48:14+00:00",
+            "comment": "Auto-blocked by IT Solutions USA security proxy after malicious web-shell/backdoor scanning and attack probes. Requests blocked (403).",
+            "categories": [
+              21,
+              15,
+              19
+            ],
+            "reporterId": 320083,
+            "reporterCountryCode": "US",
+            "reporterCountryName": "United States of America"
+          },
+          {
+            "reportedAt": "2026-07-17T09:24:10+00:00",
+            "comment": "PostgreSQL brute-force / takeover attempt. Captured by NullBlue67 honeypot.",
+            "categories": [
+              15,
+              18,
+              20
+            ],
+            "reporterId": 300501,
+            "reporterCountryCode": "ES",
+            "reporterCountryName": "Spain"
+          },
+          {
+            "reportedAt": "2026-07-16T20:25:38+00:00",
+            "comment": "Blocked by UFW (TCP on 54619)\nSource port: 8201\nTTL: 47\nPacket length: 60\nTOS: 0x08\n\nThis report (for 185.220.101.34) was generated by:\nhttps://github.com/sefinek/UFW-AbuseIPDB-Reporter",
+            "categories": [
+              14
+            ],
+            "reporterId": 209271,
+            "reporterCountryCode": "US",
+            "reporterCountryName": "United States of America"
+          },
+          {
+            "reportedAt": "2026-07-15T14:34:59+00:00",
+            "comment": "(mod_security) mod_security (id:210350) triggered by 185.220.101.34 (tor-exit-34.for-privacy.net): 1 in the last 300 secs; Ports: *; Direction: 1; Trigger: LF_MODSEC; Logs: [Wed Jul 15 10:34:54.867912 2026] [security2:error] [pid 2190:tid 2190] [client 185.220.101.34:13093] ModSecurity: Access denied with code 403 (phase 2). Pattern match \"\\\\\\\\b(close|keep-alive),[\\\\\\\\t\\\\\\\\n\\\\\\\\r ]{0,1}(close|keep-alive)\\\\\\\\b\" at REQUEST_HEADERS:Connection. [file \"/etc/apache2/conf.d/modsec_vendor_configs/comodo_apache/12_HTTP_Protocol.conf\"] [line \"70\"] [id \"210350\"] [rev \"1\"] [msg \"COMODO WAF: Multiple/Conflicting Connection Header Data Found||www.bestcountryclubs.com|F|4\"] [data \"keep-alive, close\"] [severity \"WARNING\"] [tag \"CWAF\"] [tag \"Protocol\"] [hostname \"www.bestcountryclubs.com\"] [uri \"/\"] [unique_id \"aleajgxhRTYm8KLD_oPJmQAAAAM\"]",
+            "categories": [
+              18,
+              19,
+              21
+            ],
+            "reporterId": 56941,
+            "reporterCountryCode": "US",
+            "reporterCountryName": "United States of America"
+          },
+          {
+            "reportedAt": "2026-07-13T05:58:04+00:00",
+            "comment": "DDoS attack: 110 requests in 5m (GET / or repair.php).",
+            "categories": [
+              4
+            ],
+            "reporterId": 270793,
+            "reporterCountryCode": "IN",
+            "reporterCountryName": "India"
+          }
+        ]
+      }
+    }
+  }
+}

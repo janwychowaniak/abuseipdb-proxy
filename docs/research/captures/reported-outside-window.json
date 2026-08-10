@@ -1,0 +1,40 @@
+{
+  "captured_at": "2026-08-10T16:11:06+00:00",
+  "request": {
+    "method": "GET",
+    "url": "https://api.abuseipdb.com/api/v2/check",
+    "params": {
+      "ipAddress": "193.0.6.139"
+    },
+    "auth": "valid key (redacted)"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json",
+      "X-RateLimit-Limit": "1000",
+      "X-RateLimit-Remaining": "973",
+      "X-RateLimit-Reset": "1786406400"
+    },
+    "body": {
+      "data": {
+        "ipAddress": "193.0.6.139",
+        "isPublic": true,
+        "ipVersion": 4,
+        "isWhitelisted": false,
+        "abuseConfidenceScore": 0,
+        "countryCode": "NL",
+        "usageType": "Data Center/Web Hosting/Transit",
+        "isp": "RIPE Network Coordination Centre",
+        "domain": "ripe.net",
+        "hostnames": [
+          "www.ripe.net"
+        ],
+        "isTor": false,
+        "totalReports": 0,
+        "numDistinctUsers": 0,
+        "lastReportedAt": "2022-03-15T22:52:20+00:00"
+      }
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "captured_at": "2026-08-10T16:08:23+00:00",
+  "request": {
+    "method": "GET",
+    "url": "https://api.abuseipdb.com/api/v2/check",
+    "params": {
+      "ipAddress": "1.1.1.1"
+    },
+    "auth": "valid key (redacted)"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json",
+      "X-RateLimit-Limit": "1000",
+      "X-RateLimit-Remaining": "978",
+      "X-RateLimit-Reset": "1786406400"
+    },
+    "body": {
+      "data": {
+        "ipAddress": "1.1.1.1",
+        "isPublic": true,
+        "ipVersion": 4,
+        "isWhitelisted": true,
+        "abuseConfidenceScore": 0,
+        "countryCode": "AU",
+        "usageType": "Content Delivery Network",
+        "isp": "APNIC and Cloudflare DNS Resolver project",
+        "domain": "cloudflare.com",
+        "hostnames": [
+          "one.one.one.one"
+        ],
+        "isTor": false,
+        "totalReports": 90,
+        "numDistinctUsers": 32,
+        "lastReportedAt": "2026-08-10T11:45:57+00:00"
+      }
+    }
+  }
+}

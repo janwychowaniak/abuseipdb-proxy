@@ -1,0 +1,40 @@
+{
+  "captured_at": "2026-08-10T16:08:23+00:00",
+  "request": {
+    "method": "GET",
+    "url": "https://api.abuseipdb.com/api/v2/check",
+    "params": {
+      "ipAddress": "8.8.8.8"
+    },
+    "auth": "valid key (redacted)"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json",
+      "X-RateLimit-Limit": "1000",
+      "X-RateLimit-Remaining": "979",
+      "X-RateLimit-Reset": "1786406400"
+    },
+    "body": {
+      "data": {
+        "ipAddress": "8.8.8.8",
+        "isPublic": true,
+        "ipVersion": 4,
+        "isWhitelisted": true,
+        "abuseConfidenceScore": 0,
+        "countryCode": "US",
+        "usageType": "Content Delivery Network",
+        "isp": "Google LLC",
+        "domain": "google.com",
+        "hostnames": [
+          "dns.google"
+        ],
+        "isTor": false,
+        "totalReports": 110,
+        "numDistinctUsers": 49,
+        "lastReportedAt": "2026-08-10T14:51:41+00:00"
+      }
+    }
+  }
+}
