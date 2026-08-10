@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+command -v gitleaks >/dev/null 2>&1 || { echo "⚠️  gitleaks not installed — skipping" >&2; exit 0; }
+# --config given explicitly: config autodetection looks in the --source dir, and $1
+# lives in .git/, so without it the message scan would run on default rules only.
+gitleaks detect --no-git --source "$1" --config .gitleaks.toml --redact -v || {   # v8.19+: gitleaks dir "$1"
+  echo "❌ gitleaks: secret in the commit MESSAGE — commit blocked" >&2; exit 1; }

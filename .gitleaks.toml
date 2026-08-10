@@ -1,0 +1,33 @@
+title = "abuseipdb-proxy gitleaks config"
+
+[extend]
+useDefault = true                    # keep the FULL built-in ruleset; rules below only ADD
+
+[allowlist]
+description = "false positives"
+paths = ['''\.gitleaks\.toml''']     # don't scan our own config (it carries rule regexes)
+
+# --- ADD-ON rules (jw- prefix = never collides with a built-in id) ----------------
+
+[[rules]]
+# AbuseIPDB v2 key: 80 hex chars, NO prefix. Bare-shape rule (80-hex collides with
+# no common hash: sha1=40, sha256=64, sha384=96) so it fires even when the value is
+# pasted alone, e.g. into a commit message. Deliberately NO keywords: the only
+# candidate ("abuseipdb") occurs in this repo's ordinary prose, and a prose keyword
+# suppresses generic-api-key line-locally (measured, see gitleaks-setup.md Gotchas).
+id = "jw-abuseipdb-key"
+description = "AbuseIPDB API key (bare 80-hex)"
+regex = '''\b[0-9a-f]{80}\b'''
+
+[[rules]]
+# The format the default ruleset misses OUTRIGHT ("ant" is a generic-api-key stopword).
+id = "jw-anthropic-key"
+description = "Anthropic API key"
+regex = '''\bsk-ant-[A-Za-z0-9]{2,12}-[A-Za-z0-9_-]{80,120}\b'''
+keywords = ["sk-ant-"]
+
+[[rules]]
+id = "jw-openrouter-key"
+description = "OpenRouter API key (sk-or-v1-)"
+regex = '''sk-or-v1-[0-9a-f]{64}'''
+keywords = ["sk-or-v1-"]
