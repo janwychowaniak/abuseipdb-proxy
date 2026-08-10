@@ -306,11 +306,15 @@ one-JSON-object-per-line rule.
   runners would mask a violation, **CI enforces it**: a
   `DOCKER_BUILDKIT=0 docker build` gate (or, if the runner's Docker drops
   the legacy builder, a lint step failing on the banned syntax).
-- **`.dockerignore` is mandatory**, excluding at minimum `.env`, `.git/`
-  and `docs/` — the image is published publicly, gitleaks scans git
-  history, not image layers, and a conventional `COPY . /app` would bake
-  the real key into a public layer (audit blocker). The key enters the
-  container only via runtime environment, never at build time.
+- **`.dockerignore` is mandatory and whitelist-style** (`*` then explicit
+  `!` entries): nothing enters the build context unless listed, which
+  structurally excludes `.env`, `.git/`, `docs/` and anything added in the
+  future — the image is published publicly, gitleaks scans git history,
+  not image layers, and a conventional `COPY . /app` would bake the real
+  key into a public layer (audit blocker; default-deny verified on the
+  legacy builder 2026-08-10, including `!dir/` re-inclusion and last-match
+  re-exclusion of `**/__pycache__`). The key enters the container only via
+  runtime environment, never at build time.
 - **Compose**: publishes `127.0.0.1:8000:8000` only; `container_name`
   pinned. The container runs a **single uvicorn process** (no `--workers`):
   a config error must crash the container visibly, not leave a master

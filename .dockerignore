@@ -1,19 +1,13 @@
-# SPEC §8: mandatory — the image is published publicly and gitleaks scans
-# git history, not image layers. The key enters only via runtime environment.
-.env
-.env.*
-.git
-.githooks
-.github
-.gitleaks.toml
-docs
-tests
-.venv
-.pytest_cache
-.ruff_cache
-__pycache__
-*.pyc
-Dockerfile
-compose.yml
-.dockerignore
-CLAUDE.md
+# SPEC §8: the image is published publicly and gitleaks scans git history,
+# not image layers. Whitelist style: nothing enters the build context unless
+# listed here — structurally prevents .env (and anything future) from ever
+# reaching a layer. The key enters the container only via runtime environment.
+*
+!pyproject.toml
+!uv.lock
+!README.md
+!LICENSE
+!src/
+# re-exclusions inside whitelisted dirs (last match wins)
+**/__pycache__
+**/*.pyc
