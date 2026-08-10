@@ -70,7 +70,7 @@ def main() -> None:
         body = {"_non_json_body": resp.text[:2000]}
 
     capture = {
-        "captured_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+        "captured_at": datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds"),
         "request": {
             "method": "GET",
             "url": CHECK_URL,
@@ -91,10 +91,17 @@ def main() -> None:
     data = body.get("data", {}) if isinstance(body, dict) else {}
     triage = {
         k: data.get(k)
-        for k in ("abuseConfidenceScore", "totalReports", "isWhitelisted", "isPublic", "lastReportedAt")
+        for k in (
+            "abuseConfidenceScore",
+            "totalReports",
+            "isWhitelisted",
+            "isPublic",
+            "lastReportedAt",
+        )
         if k in data
     }
-    print(f"{args.name}: HTTP {resp.status_code} {triage or body} -> {out.relative_to(pathlib.Path.cwd())}")
+    rel = out.relative_to(pathlib.Path.cwd())
+    print(f"{args.name}: HTTP {resp.status_code} {triage or body} -> {rel}")
 
 
 if __name__ == "__main__":
