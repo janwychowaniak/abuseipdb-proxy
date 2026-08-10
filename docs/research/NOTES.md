@@ -20,7 +20,9 @@ here is a decision yet.
 
 1. **`abuseConfidenceScore` is window-invariant.** Same IP, `maxAgeInDays`
    30/90/365: score stays 30 while `totalReports` goes 2/23/31
-   (`midscore-age*.json`); the saturated Tor IP stays 100 at 40/124/633
+   (`midscore-default.json` + `midscore-age{90,365}.json` — the 30-day
+   value rides on the default==30 equivalence, finding 2, which was
+   demonstrated on the Tor IP); the saturated Tor IP stays 100 at 40/124/633
    (`bad-tor-age*.json`). `maxAgeInDays` filters `totalReports` and
    `reports[]` only — it does **not** recompute the score. Consequence: the
    sibling rule "score = what the GUI shows" holds for ANY window choice;
@@ -71,7 +73,22 @@ here is a decision yet.
    official docs (`Retry-After` in seconds until midnight UTC) and marked as
    such; replace with a live capture if we ever hit the limit naturally.
 
+11. **Python 3.13 `is_global` boundary, measured** (CPython 3.13.12,
+    2026-08-10): rejects RFC1918, loopback, link-local, CGNAT 100.64/10
+    (`is_private` is False for CGNAT too — it is *neither*), TEST-NET-1/3,
+    benchmark, ULA, IPv6 documentation 2001:db8::/32, unspecified,
+    broadcast — but **multicast 224.0.0.1 is `is_global=True`** (IANA
+    counts global-scope multicast as reachable), hence the SPEC's
+    `and not is_multicast`. v4-mapped addresses delegate
+    `is_global`/`is_private` to the embedded IPv4 on 3.13. Caveat: these
+    semantics were reworked in CPython 3.12.4/3.13 (gh-113171) and can
+    drift across patch versions — the SPEC's category list is normative,
+    the module is just the implementation.
+
 ## Open questions for the SPEC (D-decisions to be)
+
+*(Historical — all settled in `docs/SPEC.md` D1–D8, revised after the
+three-lens subagent audit. Kept as the research trail.)*
 
 - `known` semantics: window-scoped `totalReports > 0` vs all-time
   `lastReportedAt != null`; how `isWhitelisted` factors in (proposed lean:
