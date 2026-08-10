@@ -13,6 +13,9 @@
 - **English only** for everything that lands in the repository.
 - **Tests are offline**: no network, no key; upstream faked from
   `docs/research/captures/`. Never weaken the network guard in conftest.
+- **`docs/research/captures/` are frozen fixtures**: tests assert their
+  exact values. Never overwrite an existing capture — a fresh capture gets a
+  fresh file name.
 
 ## Source of truth
 
@@ -27,5 +30,8 @@ it. When touching behavior, cite the decision you are implementing.
 - Run locally: `uv run uvicorn --factory abuseipdb_proxy.app:create_app --port 8000`
 - Container must build with the classic builder — no BuildKit-only syntax in
   the Dockerfile (SPEC §8); CI enforces this.
+- Release: bump `version` in `pyproject.toml`, tag `v<version>`, push the
+  tag — CI verifies tag==version as its first step, then publishes to
+  ghcr.io (SPEC §8).
 - Secret hygiene: gitleaks hooks are active via `core.hooksPath=.githooks`
   (per-clone setting); the CI gitleaks scan is the non-bypassable layer.
