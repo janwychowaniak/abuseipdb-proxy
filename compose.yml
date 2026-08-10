@@ -1,0 +1,9 @@
+services:
+  abuseipdb-proxy:
+    build: .
+    image: ghcr.io/janwychowaniak/abuseipdb-proxy:latest
+    container_name: abuseipdb-proxy
+    env_file: .env
+    ports:
+      - "127.0.0.1:8000:8000"   # SPEC §1: localhost-only, always
+    restart: unless-stopped

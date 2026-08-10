@@ -1,0 +1,19 @@
+# SPEC §8: mandatory — the image is published publicly and gitleaks scans
+# git history, not image layers. The key enters only via runtime environment.
+.env
+.env.*
+.git
+.githooks
+.github
+.gitleaks.toml
+docs
+tests
+.venv
+.pytest_cache
+.ruff_cache
+__pycache__
+*.pyc
+Dockerfile
+compose.yml
+.dockerignore
+CLAUDE.md
