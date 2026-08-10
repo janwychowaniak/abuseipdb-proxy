@@ -53,7 +53,16 @@ here is a decision yet.
    UTC per `X-RateLimit-Reset` epoch). Headers present on 200 **and** 422 —
    and Remaining decrements on 422 too, so invalid queries burn quota.
    A local pre-validation of IP syntax would conserve it.
-9. **429 not captured live** — doing so would burn the full daily quota.
+9. **v4-mapped IPv6 is a separate, blank identity upstream.**
+   `::ffff:8.8.8.8` → `ipVersion: 6`, 0 reports, not whitelisted
+   (`v4mapped-google.json`), while `8.8.8.8` has 110 reports and is
+   whitelisted. Querying the mapped form silently yields an empty
+   reputation for a heavily-reported IP — the proxy should unwrap
+   (`ipaddress`'s `.ipv4_mapped`) before querying, or reject the form.
+   Note: Python 3.13's `is_global`/`is_private` already delegate to the
+   embedded IPv4 for mapped addresses, so local validation is consistent
+   either way.
+10. **429 not captured live** — doing so would burn the full daily quota.
    `captures/error-quota-429.RECONSTRUCTED.json` is hand-built from the
    official docs (`Retry-After` in seconds until midnight UTC) and marked as
    such; replace with a live capture if we ever hit the limit naturally.
@@ -65,7 +74,11 @@ here is a decision yet.
   `known = totalReports > 0 or isWhitelisted`, window-scoped).
 - Non-global IPs (RFC1918, loopback, link-local, reserved): reject locally
   with a 4xx before any upstream call (quota + honesty), or pass through?
-  (Proposed lean: reject via `ipaddress.ip_address(x).is_global`.)
+  (Proposed lean: accept iff `is_global and not is_multicast` — measured on
+  Python 3.13: bare `is_global` covers RFC1918/loopback/link-local/CGNAT/
+  TEST-NET/benchmark/ULA/unspecified/broadcast but lets multicast through,
+  since the IANA registry counts global-scope multicast as reachable.
+  Plus: unwrap v4-mapped input first, see finding 9.)
 - Default `maxAgeInDays` (lean: upstream default 30) and whether to expose
   it, and `verbose`, per request.
 - Error mapping ours→caller: upstream 401 is proxy misconfiguration (5xx to

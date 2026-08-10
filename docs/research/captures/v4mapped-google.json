@@ -1,0 +1,38 @@
+{
+  "captured_at": "2026-08-10T16:53:22+00:00",
+  "request": {
+    "method": "GET",
+    "url": "https://api.abuseipdb.com/api/v2/check",
+    "params": {
+      "ipAddress": "::ffff:8.8.8.8"
+    },
+    "auth": "valid key (redacted)"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json",
+      "X-RateLimit-Limit": "1000",
+      "X-RateLimit-Remaining": "963",
+      "X-RateLimit-Reset": "1786406400"
+    },
+    "body": {
+      "data": {
+        "ipAddress": "::ffff:8.8.8.8",
+        "isPublic": true,
+        "ipVersion": 6,
+        "isWhitelisted": false,
+        "abuseConfidenceScore": 0,
+        "countryCode": null,
+        "usageType": "Reserved",
+        "isp": "IPv4Map",
+        "domain": null,
+        "hostnames": [],
+        "isTor": false,
+        "totalReports": 0,
+        "numDistinctUsers": 0,
+        "lastReportedAt": null
+      }
+    }
+  }
+}
