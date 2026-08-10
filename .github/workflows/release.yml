@@ -1,0 +1,30 @@
+name: release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+  packages: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify tag matches pyproject version (first step, before any build — SPEC §8)
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          VER="$(grep -Po '^version = "\K[^"]+' pyproject.toml)"
+          if [ "$TAG" != "$VER" ]; then
+            echo "::error::tag v$TAG does not match pyproject version $VER"
+            exit 1
+          fi
+      - name: Build (legacy builder)
+        run: |
+          DOCKER_BUILDKIT=0 docker build \
+            -t "ghcr.io/${GITHUB_REPOSITORY}:${GITHUB_REF_NAME#v}" \
+            -t "ghcr.io/${GITHUB_REPOSITORY}:latest" .
+      - name: Push to ghcr.io
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker push "ghcr.io/${GITHUB_REPOSITORY}:${GITHUB_REF_NAME#v}"
+          docker push "ghcr.io/${GITHUB_REPOSITORY}:latest"

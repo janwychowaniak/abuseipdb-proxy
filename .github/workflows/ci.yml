@@ -1,0 +1,33 @@
+name: ci
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions: { contents: read }
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest -q          # offline by design: no network, no key (SPEC §6)
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build with the legacy builder (classic-builder gate, SPEC §8)
+        run: DOCKER_BUILDKIT=0 docker build -t abuseipdb-proxy:ci .
+      - name: Smoke-test /health with a dummy key (SPEC §8)
+        run: |
+          docker run -d --name smoke -e ABUSEIPDB_API_KEY=ci-dummy-key \
+            -p 127.0.0.1:8000:8000 abuseipdb-proxy:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/health; then exit 0; fi
+            sleep 1
+          done
+          echo "::error::/health never came up"
+          docker logs smoke
+          exit 1
