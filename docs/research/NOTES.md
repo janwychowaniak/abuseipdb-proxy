@@ -25,9 +25,13 @@ here is a decision yet.
    `reports[]` only — it does **not** recompute the score. Consequence: the
    sibling rule "score = what the GUI shows" holds for ANY window choice;
    the window choice only matters for report counts (and any `known`
-   definition built on them). GUI parity still deserves one human glance at
-   abuseipdb.com/check/87.98.154.146 (expect 30%) — automated fetch is
-   Cloudflare-blocked (curl challenge page, WebFetch 403).
+   definition built on them). **GUI parity confirmed by eyeball 2026-08-10**:
+   abuseipdb.com/check/87.98.154.146 shows "Confidence of Abuse is 30%" ==
+   API score 30. The GUI's "reported 57 times" is an all-time counter —
+   larger than any CHECK window (31 at maxAgeInDays=365) — so the GUI
+   report COUNT is not reproducible via CHECK; the parity rule is about the
+   score only. (Automated page fetch is Cloudflare-blocked; human glance
+   was the way.)
 2. **Upstream default window is 30 days**: `bad-tor-default.json` ==
    `bad-tor-age30.json` (40 reports both). Matches the official docs.
 3. **`totalReports` is window-scoped; `lastReportedAt` is all-time.**
