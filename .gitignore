@@ -216,3 +216,43 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+# --------------- Environments ---------------
+
+.env
+.envrc
+.env.local
+env/
+ENV/
+env.bak/
+
+# --------------- AI -------------------------
+
+# Aider
+.aider.conf.yml
+.aider*
+
+# Claude Code - personal/session files only
+.claude/settings.local.json
+.claude/*.log
+.claude/logs/
+.claude/cache/
+
+# OpenCode - session data and local files
+.opencode/
+
+# Gemini CLI - project-level config dir (session data in ~/.gemini/)
+# NOTE: commit .gemini/settings.json explicitly if sharing with team
+.gemini/
+
+# Codex CLI - project-level config (session data, history, logs in ~/.codex/)
+# NOTE: commit .codex/config.toml explicitly if sharing with team
+.codex/
+
+# Cursor - nothing needed (all data in ~/.config/Cursor/ or ~/.cursor/)
+# Optional: .cursorignore if you want to control AI context (safe to commit)
