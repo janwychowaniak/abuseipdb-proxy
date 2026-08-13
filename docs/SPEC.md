@@ -308,7 +308,10 @@ one-JSON-object-per-line rule.
   the legacy builder, a lint step failing on the banned syntax). The
   runtime stage drops to a dedicated non-root user (`app`, uid 10001) —
   defense in depth; derived images that need root (e.g. the README's
-  corporate-CA recipe) must switch to `USER root` and back.
+  corporate-CA recipe) must switch to `USER root` and back. A
+  `HEALTHCHECK` probes `GET /health` (§3) every 30 s; without an
+  orchestrator the state is informational (`docker ps`) — nothing
+  auto-restarts on `unhealthy`.
 - **`.dockerignore` is mandatory and whitelist-style** (`*` then explicit
   `!` entries): nothing enters the build context unless listed, which
   structurally excludes `.env`, `.git/`, `docs/` and anything added in the
