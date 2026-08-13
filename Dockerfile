@@ -13,7 +13,9 @@ COPY src ./src
 RUN uv sync --frozen --no-dev --no-editable
 
 FROM python:3.13-slim-bookworm
-LABEL org.opencontainers.image.source="https://github.com/janwychowaniak/abuseipdb-proxy"
+LABEL org.opencontainers.image.source="https://github.com/janwychowaniak/abuseipdb-proxy" \
+      org.opencontainers.image.description="Read-only AbuseIPDB APIv2 CHECK reputation proxy" \
+      org.opencontainers.image.licenses="MIT"
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
