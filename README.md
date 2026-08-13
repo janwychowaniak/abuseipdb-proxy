@@ -103,7 +103,7 @@ default and ignores `SSL_CERT_FILE` — use `REQUESTS_CA_BUNDLE`). The image
 runs as non-root user `app`, so installing the CA needs a temporary root:
 
 ```dockerfile
-FROM ghcr.io/janwychowaniak/abuseipdb-proxy:0.1.0
+FROM ghcr.io/janwychowaniak/abuseipdb-proxy:0.1.1
 USER root
 COPY corp-ca.crt /usr/local/share/ca-certificates/
 RUN update-ca-certificates
