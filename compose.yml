@@ -5,5 +5,13 @@ services:
     container_name: abuseipdb-proxy
     env_file: .env
     ports:
-      - "127.0.0.1:8000:8000"   # SPEC §1: localhost-only, always
+      # SPEC §1: localhost-only, always — no caller auth by design, so never
+      # widen this binding. It also keeps Docker from punching the port
+      # through the host firewall for the outside world.
+      - "127.0.0.1:${ABUSEIPDB_PROXY_PORT:-8000}:8000"
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
