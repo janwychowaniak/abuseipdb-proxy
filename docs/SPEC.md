@@ -305,7 +305,10 @@ one-JSON-object-per-line rule.
   `FROM --platform=`); must build on a legacy-builder machine. Because CI
   runners would mask a violation, **CI enforces it**: a
   `DOCKER_BUILDKIT=0 docker build` gate (or, if the runner's Docker drops
-  the legacy builder, a lint step failing on the banned syntax).
+  the legacy builder, a lint step failing on the banned syntax). The
+  runtime stage drops to a dedicated non-root user (`app`, uid 10001) —
+  defense in depth; derived images that need root (e.g. the README's
+  corporate-CA recipe) must switch to `USER root` and back.
 - **`.dockerignore` is mandatory and whitelist-style** (`*` then explicit
   `!` entries): nothing enters the build context unless listed, which
   structurally excludes `.env`, `.git/`, `docs/` and anything added in the

@@ -99,13 +99,16 @@ Egress proxy is runtime configuration, not a code concern — set
 `HTTPS_PROXY`/`NO_PROXY` in the container environment. If your proxy
 intercepts TLS, add its CA in a thin derived image and point `requests` at
 the system store (note: `requests` trusts only its bundled certifi by
-default and ignores `SSL_CERT_FILE` — use `REQUESTS_CA_BUNDLE`):
+default and ignores `SSL_CERT_FILE` — use `REQUESTS_CA_BUNDLE`). The image
+runs as non-root user `app`, so installing the CA needs a temporary root:
 
 ```dockerfile
 FROM ghcr.io/janwychowaniak/abuseipdb-proxy:0.1.0
+USER root
 COPY corp-ca.crt /usr/local/share/ca-certificates/
 RUN update-ca-certificates
 ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+USER app
 ```
 
 ## Development
