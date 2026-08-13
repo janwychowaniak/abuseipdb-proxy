@@ -315,8 +315,10 @@ one-JSON-object-per-line rule.
   legacy builder 2026-08-10, including `!dir/` re-inclusion and last-match
   re-exclusion of `**/__pycache__`). The key enters the container only via
   runtime environment, never at build time.
-- **Compose**: publishes `127.0.0.1:8000:8000` only; `container_name`
-  pinned. The container runs a **single uvicorn process** (no `--workers`):
+- **Compose**: publishes on `127.0.0.1` only; the host port is
+  `ABUSEIPDB_PROXY_PORT` (default 8000, compose-only — the app never reads
+  it); `container_name` pinned; container logs capped (json-file,
+  10 MB × 3). The container runs a **single uvicorn process** (no `--workers`):
   a config error must crash the container visibly, not leave a master
   respawning dead workers while holding the port.
 - **CI**: offline test suite + container build + smoke-test. The smoke test

@@ -78,6 +78,10 @@ Behavior notes:
 | `MAX_AGE_DAYS` | no | 30 | default report window (days) |
 | `UPSTREAM_TIMEOUT_S` | no | 5 | upstream timeout (seconds) |
 
+Compose additionally interpolates `ABUSEIPDB_PROXY_PORT` (default 8000) as
+the host port published on `127.0.0.1`. It is compose-only — the app never
+reads it, so it has no effect under plain `docker run`.
+
 ## Logs
 
 Structured JSON, one object per line, to stdout only — read with
@@ -85,7 +89,9 @@ Structured JSON, one object per line, to stdout only — read with
 parameters, the computed verdict and upstream latency, plus AbuseIPDB's
 `X-RateLimit-Remaining`; the level switches to `WARNING` once fewer than 50
 daily requests remain (free tier: 1000/day). The log stream is the only
-quota-visibility mechanism.
+quota-visibility mechanism. Under compose the container log is capped
+(json-file, 10 MB × 3 files); the Quickstart `docker run` path has no cap
+unless you pass `--log-opt`.
 
 ## Deploying behind a corporate proxy
 
