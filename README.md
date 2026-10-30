@@ -17,8 +17,15 @@ docker run -d --name abuseipdb-proxy --env-file .env \
 curl -s 127.0.0.1:8000/check/87.98.154.146 | jq
 ```
 
-From source: `docker compose up -d --build`. Without Docker (requires
-[uv](https://docs.astral.sh/uv/)):
+Prebuilt images are published on version tags:
+`docker pull ghcr.io/janwychowaniak/abuseipdb-proxy:0.2.0` (`latest` tracks
+the newest release). The compose file uses that same `latest` name:
+`docker compose pull` fetches the published image, while
+`docker compose up -d --build` builds it from your checkout. A host without
+registry access can load a release file instead, see
+[Using a release file on a host without registry access](#using-a-release-file-on-a-host-without-registry-access).
+
+Without Docker (requires [uv](https://docs.astral.sh/uv/)):
 
 ```bash
 uv sync
@@ -170,6 +177,53 @@ and subject alternative names on the issued certificates.
 `REQUESTS_CA_BUNDLE` still works as a wholesale replacement of the default
 bundle; `CA_FILE` adds to whatever it selects. (`requests` ignores
 `SSL_CERT_FILE`.)
+
+## Using a release file on a host without registry access
+
+From 0.2.0, every release on GitHub carries the published image as a file,
+`abuseipdb-proxy-<version>.tar.gz` (the image saved by its full tag), with
+`abuseipdb-proxy-<version>.tar.gz.sha256` beside it. On the target host:
+
+```bash
+sha256sum -c abuseipdb-proxy-0.2.0.tar.gz.sha256
+docker load -i abuseipdb-proxy-0.2.0.tar.gz
+docker image inspect --format '{{.Id}}' ghcr.io/janwychowaniak/abuseipdb-proxy:0.2.0
+```
+
+The last line must print the image Id (configuration digest) that
+[`CHANGELOG.md`](CHANGELOG.md) records for the version. The Id survives the
+transfer where the registry digest does not: on Docker's default `overlay2`
+image store it is the digest of the image's configuration, which the archive
+carries byte for byte. Before it attaches the file, the release workflow
+checks that the archive carries the configuration digest it published, and
+loads the archive back into a store without the image.
+
+The same Id can be checked without Docker: the archive's `manifest.json`
+names the configuration blob, and that blob's SHA-256 is the Id.
+
+```bash
+config=$(tar -xzOf abuseipdb-proxy-0.2.0.tar.gz manifest.json | grep -o '"Config":"[^"]*"' | cut -d'"' -f4)
+tar -xzOf abuseipdb-proxy-0.2.0.tar.gz "$config" | sha256sum   # the Id, without "sha256:"
+```
+
+The archive loads under `ghcr.io/janwychowaniak/abuseipdb-proxy:0.2.0`, while
+the shipped `compose.yml` names `…:latest`. Either retag the loaded image:
+
+```bash
+docker tag ghcr.io/janwychowaniak/abuseipdb-proxy:0.2.0 ghcr.io/janwychowaniak/abuseipdb-proxy:latest
+```
+
+or pin the version in an override file of your own, for example
+`compose.pin.yml`, used as
+`docker compose -f compose.yml -f compose.pin.yml up -d`:
+
+```yaml
+services:
+  abuseipdb-proxy:
+    image: ghcr.io/janwychowaniak/abuseipdb-proxy:0.2.0
+```
+
+Either way, start without `--build`: the image is already there.
 
 ## Development
 

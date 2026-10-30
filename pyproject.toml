@@ -1,6 +1,6 @@
 [project]
 name = "abuseipdb-proxy"
-version = "0.1.1"
+version = "0.2.0"
 description = "Read-only localhost HTTP proxy answering IP-reputation questions against AbuseIPDB"
 readme = "README.md"
 license = "MIT"

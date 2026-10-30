@@ -1,0 +1,77 @@
+# Changelog
+
+The release notes are the annotated tag messages. This file carries the same
+notes where they can be read without git, together with the image digest each
+version was published under, its image Id (configuration digest) and the
+Python it runs, and corrections to them as errata.
+
+**A tag is never pushed again, not even to fix its message.** Pushing it runs
+the release again and can publish the same version under a different digest,
+which breaks the one property a pinned deployment stands on. A wrong line in
+a tag message is corrected here instead, as an erratum that says what the tag
+claims and what is true.
+
+The image Id is what a host compares after `docker load` of a release file.
+On Docker's default `overlay2` image store, it is the digest of the image's
+configuration, which the archive carries byte for byte (see the README).
+
+## 0.2.0 — (pending: the date of the tag)
+
+`ghcr.io/janwychowaniak/abuseipdb-proxy@sha256:` (pending: from the release
+workflow's step summary)
+
+Image Id (configuration digest) `sha256:` (pending), after a pull and after
+`docker load` of the release file alike. Python (pending).
+
+Extra CA trust without a derived image, and the image as a release file.
+
+- CA_FILE (new, optional): a PEM file of certificate authorities trusted in
+  addition to the default ones for TLS with AbuseIPDB, directly or through a
+  proxy tunnel; the TLS of an https:// proxy endpoint itself keeps the
+  default trust. Read once at startup; a missing, unreadable or
+  certificate-less file refuses the start with one line naming CA_FILE.
+  Verification is never switched off.
+- GET /health gains "name", "version" and "extra_ca" (true when CA_FILE is
+  loaded).
+- compose.ca.yml mounts the file and sets the variable; the derived-image
+  recipe is gone from the documentation.
+- ABUSEIPDB_BASE_URL (new, optional) overrides the upstream base URL, for
+  tests and mocks.
+- Every release now carries the published image as
+  abuseipdb-proxy-<version>.tar.gz, saved by its full tag, with its .sha256;
+  CHANGELOG.md records each version's digest and image Id (configuration
+  digest).
+
+Unchanged: the /check endpoint and its response, the error contract (a
+failed TLS verification is still 504 upstream-timeout:), and the proxy
+variables.
+
+## 0.1.1 — 2026-08-13
+
+`ghcr.io/janwychowaniak/abuseipdb-proxy@sha256:b45dafd58973c16e55fb530a4b53461eba7f44200d521cc950a3224dd264a544`,
+the digest the `0.1.1` tag resolved to in the registry on 2026-10-30, when
+this entry was written.
+
+Image Id (configuration digest)
+`sha256:b3e1c5edc0ba9ed7957d855ddfe95284ec93793e52f8ef057c2ae5d5460964c6`,
+the configuration that manifest names, which a pull shows as the Id on
+`overlay2`. Created 2026-08-13T20:11:39Z; Python 3.13.15. The creation time
+and the Python were read from the image configuration in the registry,
+without a pull. No GitHub Release exists for this tag.
+
+abuseipdb-proxy 0.1.1 — non-root runtime user, HEALTHCHECK, OCI labels
+
+## 0.1.0 — 2026-08-10
+
+`ghcr.io/janwychowaniak/abuseipdb-proxy@sha256:9ff317ac3602074daef684ecac2d01387000f8ca7f610f15dc020a9b90f0a93a`,
+the digest the `0.1.0` tag resolved to in the registry on 2026-10-30, when
+this entry was written.
+
+Image Id (configuration digest)
+`sha256:83fdfd593024d5992ae0018af7d806d5b2c28eb8f4682d803f0649a1f6b0c802`,
+the configuration that manifest names, which a pull shows as the Id on
+`overlay2`. Created 2026-08-10T18:17:02Z; Python 3.13.14. The creation time
+and the Python were read from the image configuration in the registry,
+without a pull. No GitHub Release exists for this tag.
+
+abuseipdb-proxy 0.1.0 — first release
