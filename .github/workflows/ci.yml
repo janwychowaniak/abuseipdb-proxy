@@ -20,14 +20,53 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build with the legacy builder (classic-builder gate, SPEC §8)
         run: DOCKER_BUILDKIT=0 docker build -t abuseipdb-proxy:ci .
-      - name: Smoke-test /health with a dummy key (SPEC §8)
+      # The release runs the script on the published image against its record;
+      # here it runs on every push, with no record for an image never pushed.
+      # The smoke tests below then use the image the archive loaded back.
+      - name: Archive round trip (save by tag, check Config, remove, load, compare Id)
+        run: .github/scripts/archive-image.sh abuseipdb-proxy ci -
+      # Both smoke tests: a read-only root filesystem and no tmpfs, since the
+      # service writes nothing, with or without CA_FILE (SPEC §8). A dummy key:
+      # /health and local validation never reach upstream.
+      - name: Smoke-test read-only, without CA_FILE
         run: |
-          docker run -d --name smoke -e ABUSEIPDB_API_KEY=ci-dummy-key \
+          docker run -d --name smoke --read-only -e ABUSEIPDB_API_KEY=ci-dummy-key \
             -p 127.0.0.1:8000:8000 abuseipdb-proxy:ci
-          for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:8000/health; then exit 0; fi
+          for _ in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8000/health > /dev/null 2>&1 && break
             sleep 1
           done
-          echo "::error::/health never came up"
-          docker logs smoke
-          exit 1
+          health=$(curl -fsS http://127.0.0.1:8000/health) || {
+            echo "::error::/health never came up"; docker logs smoke; exit 1; }
+          echo "$health"
+          grep -q '"status":"ok"' <<< "$health"
+          grep -q '"extra_ca":false' <<< "$health"
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/check/10.0.0.1)
+          test "$code" = 400  # rejected locally (D3), no upstream involved
+          docker rm -f smoke
+      - name: Smoke-test read-only, with CA_FILE (a CA generated here)
+        run: |
+          openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 1 \
+            -subj "/CN=abuseipdb-proxy CI test CA" \
+            -addext "basicConstraints=critical,CA:TRUE" \
+            -addext "keyUsage=critical,keyCertSign,cRLSign" \
+            -keyout "$RUNNER_TEMP/ca.key" -out "$RUNNER_TEMP/ca.pem"
+          chmod 644 "$RUNNER_TEMP/ca.pem"  # read by the service's uid 10001
+          docker run -d --name smoke-ca --read-only -p 127.0.0.1:8001:8000 \
+            -e ABUSEIPDB_API_KEY=ci-dummy-key -e CA_FILE=/etc/abuseipdb-proxy/ca.pem \
+            -v "$RUNNER_TEMP/ca.pem:/etc/abuseipdb-proxy/ca.pem:ro" abuseipdb-proxy:ci
+          for _ in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8001/health > /dev/null 2>&1 && break
+            sleep 1
+          done
+          health=$(curl -fsS http://127.0.0.1:8001/health) || {
+            echo "::error::/health never came up"; docker logs smoke-ca; exit 1; }
+          echo "$health"
+          grep -q '"extra_ca":true' <<< "$health"
+          logs=$(docker logs smoke-ca 2>&1)
+          loaded=$(grep '"event": "ca_file_loaded"' <<< "$logs") || {
+            echo "::error::no ca_file_loaded line"; echo "$logs"; exit 1; }
+          echo "$loaded"
+          test "$(wc -l <<< "$loaded")" = 1
+          grep -q '"certificates": 1' <<< "$loaded"
+          docker rm -f smoke-ca
