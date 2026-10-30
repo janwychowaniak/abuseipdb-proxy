@@ -424,17 +424,56 @@ one-JSON-object-per-line rule.
   overlay for `CA_FILE` (D9): it mounts `./ca.pem` read-only and sets the
   variable, with `create_host_path: false`, so that a missing file fails
   `up` at the mount instead of Docker creating a root-owned directory.
-- **CI**: offline test suite + container build + smoke-test. The smoke test
-  starts the container with a syntactically valid **dummy** key
+- **CI**: offline test suite + container build + archive round trip +
+  smoke tests. The round trip runs `.github/scripts/archive-image.sh` on
+  the CI-built image with `-` for the record, since an image never pushed
+  has none: save by tag, the archive's configuration digest computed from
+  its `manifest.json`, the image removed by Id and proven gone, the archive
+  loaded back and its Id compared, the checksum verified. The smoke tests
+  then run on the image loaded back, both with a read-only root filesystem
+  and no tmpfs, since the service writes nothing:
+  - without `CA_FILE`, `/health` with `"extra_ca":false`, and a non-global
+    address rejected locally with 400;
+  - with `CA_FILE` (a CA generated on the runner, mounted read-only),
+    `"extra_ca":true` and exactly one `ca_file_loaded` line.
+
+  Both use a syntactically valid **dummy** key
   (`ABUSEIPDB_API_KEY=ci-dummy-key` — deliberately low-entropy so secret
-  scanners never flag it) and polls `/health` via the published port with a
+  scanners never flag it) and poll `/health` via the published port with a
   bounded retry (~30 s) before failing. "No key in CI" means no *real*
   secret — without the dummy, fail-fast startup (§4) would make the smoke
-  test impossible (audit blocker, found independently by two auditors).
-- **Release**: on `v<version>` tags; the tag/pyproject version check is the
-  **first step of the release job, strictly before any build/push step**;
-  publishes to ghcr.io with `org.opencontainers.image.source` label so the
-  package auto-links to the (public) repo.
+  tests impossible (audit blocker, found independently by two auditors).
+- **Release** (`release.yml`, on `v<version>` tags), in two jobs:
+  - `publish` (`contents: read`, `packages: write`). **First, before
+    anything is built or pushed**, the gate: the tag, fetched as pushed,
+    must be annotated (its message is the release notes) and equal `v` +
+    the `pyproject.toml` version; each failure is one `::error::` line, and
+    a failed gate burns no version. Then the suite on the tagged commit, the
+    classic-builder build, the registry login only after the build, and the
+    push of `<version>` and `latest` to ghcr.io; the Dockerfile's
+    `org.opencontainers.image.source` label links the package to the
+    (public) repo. The job records the **digest** (from `RepoDigests`) and
+    the **image Id, the configuration digest read from the pushed
+    manifest** (`docker manifest inspect <image>@<digest>`), never the
+    runner's `.Id`: on the runner's containerd image store, `.Id` is not the
+    configuration digest (measured in CI). The step summary carries three
+    labelled lines: `digest`, `image Id (configuration digest)`, `Python`.
+  - `archive` (`needs: publish`; the only job with `contents: write`).
+    Pull by digest, tag `<version>`, run the archive script against the
+    record, and put the checksum into the summary. Then fetch the tag again
+    for its message, and create the GitHub Release from it with
+    `abuseipdb-proxy-<version>.tar.gz` (the image saved by its full tag,
+    through `gzip -n`) and its `.sha256`; on a re-run, both files are
+    replaced and the notes rewritten from the tag. Post-condition: the
+    published notes equal the tag message, trailing newlines aside. A
+    failure here leaves the published image untouched, and re-running this
+    job alone reaches the same end state.
+  - **A tag is never pushed again, not even to fix its message**: that
+    would run the release again and could publish the same version under
+    another digest. A wrong line is corrected in `CHANGELOG.md`, as an
+    erratum. `CHANGELOG.md` carries, per version, the notes with the
+    digest, the configuration digest and the Python, filled in after
+    `archive`.
 
 ## 9. Non-goals (v1)
 

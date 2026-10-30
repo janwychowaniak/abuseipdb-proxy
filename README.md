@@ -179,7 +179,9 @@ uv run ruff check . && uv run ruff format --check .
 ABUSEIPDB_LIVE_TESTS=1 uv run pytest -q -m live   # optional live smoke (real key)
 ```
 
-Releases: a `v<version>` tag matching `pyproject.toml` publishes the image
-to ghcr.io via CI.
+Releases: an annotated `v<version>` tag matching `pyproject.toml` publishes
+the image to ghcr.io via CI, and attaches it, as
+`abuseipdb-proxy-<version>.tar.gz` with its `.sha256`, to the tag's GitHub
+Release.
 
 [MIT](LICENSE) license.
