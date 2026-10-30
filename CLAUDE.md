@@ -23,7 +23,7 @@
 
 ## Source of truth
 
-`docs/SPEC.md` (decisions D1–D8) governs all behavior; empirical evidence
+`docs/SPEC.md` (decisions D1–D9) governs all behavior; empirical evidence
 lives in `docs/research/NOTES.md` (findings F1–F11) with raw captures next to
 it. When touching behavior, cite the decision you are implementing.
 
@@ -34,8 +34,7 @@ it. When touching behavior, cite the decision you are implementing.
 - Run locally: `uv run uvicorn --factory abuseipdb_proxy.app:create_app --port 8000`
 - Container must build with the classic builder — no BuildKit-only syntax in
   the Dockerfile (SPEC §8); CI enforces this.
-- Release: bump `version` in `pyproject.toml` and the overlay `FROM` pin in
-  README's corporate-proxy section (same commit), tag `v<version>`, push the
+- Release: bump `version` in `pyproject.toml`, tag `v<version>`, push the
   tag — CI verifies tag==version as its first step, then publishes to
   ghcr.io as `<version>` and `latest` (SPEC §8).
 - Secret hygiene: gitleaks hooks are active via `core.hooksPath=.githooks`

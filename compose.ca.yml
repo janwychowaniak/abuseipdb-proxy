@@ -1,0 +1,20 @@
+# Extra CA trust, for an egress proxy that intercepts TLS (README: "Deploying behind a
+# corporate proxy"; SPEC D9). Put the proxy's CA certificate, in PEM, next to the compose
+# files as ca.pem, readable by uid 10001 (mode 0644), then:
+#
+#   docker compose -f compose.yml -f compose.ca.yml up -d
+#
+# create_host_path: false on purpose: without ca.pem, `up` fails at the mount ("bind source
+# path does not exist"), where Docker would otherwise create a root-owned directory of that
+# name on the host. It needs Compose v2; the legacy docker-compose 1.x rejects the option.
+services:
+  abuseipdb-proxy:
+    environment:
+      CA_FILE: /etc/abuseipdb-proxy/ca.pem
+    volumes:
+      - type: bind
+        source: ./ca.pem
+        target: /etc/abuseipdb-proxy/ca.pem
+        read_only: true
+        bind:
+          create_host_path: false

@@ -63,11 +63,20 @@ Behavior notes:
   locally with `400` — they never reach upstream or burn quota.
 - Error statuses: `400` invalid input, `429` upstream quota (with
   `Retry-After` when upstream provides it), `502` upstream auth/anomaly,
-  `504` upstream timeout. Bodies are `{"detail": "<reason>"}` with stable
-  prefixes (`upstream-auth:`, `upstream-timeout:`, `upstream-unexpected:`).
+  `504` upstream timeout or connection failure, a failed TLS verification
+  included. Bodies are `{"detail": "<reason>"}` with stable prefixes
+  (`upstream-auth:`, `upstream-timeout:`, `upstream-unexpected:`).
 - `404` is a routing status ("no such endpoint"), **never** "IP unknown".
 
-`GET /health` — liveness; no upstream call.
+`GET /health` — liveness; no upstream call:
+
+```json
+{ "status": "ok", "name": "abuseipdb-proxy", "version": "…", "extra_ca": false }
+```
+
+`version` is the running package's version. `extra_ca` turns `true` when the
+service trusts an extra certificate authority (`CA_FILE`, see
+[Deploying behind a corporate proxy](#deploying-behind-a-corporate-proxy)).
 
 ## Configuration (environment / `.env`)
 
@@ -77,6 +86,15 @@ Behavior notes:
 | `SCORE_THRESHOLD` | no | 30 | default `threshold` |
 | `MAX_AGE_DAYS` | no | 30 | default report window (days) |
 | `UPSTREAM_TIMEOUT_S` | no | 5 | upstream timeout (seconds) |
+| `CA_FILE` | no | — | PEM file of extra CA certificates, trusted in addition to the default ones; unset or empty: none ([corporate proxy](#deploying-behind-a-corporate-proxy)) |
+| `ABUSEIPDB_BASE_URL` | no | `https://api.abuseipdb.com/api/v2` | upstream prefix, for tests and mocks |
+| `HTTPS_PROXY` / `NO_PROXY` | no | — | standard egress-proxy variables, honored as-is |
+
+`ABUSEIPDB_BASE_URL` replaces the prefix up to and including `/api/v2`, and
+the service appends `/check` — for example
+`ABUSEIPDB_BASE_URL=http://127.0.0.1:9000/api/v2` for a local mock. It is for
+tests and mocks only: the API key travels in the `Key` header to whatever
+host the value names, in clear when the value is `http://`.
 
 Compose additionally interpolates `ABUSEIPDB_PROXY_PORT` (default 8000) as
 the host port published on `127.0.0.1`. It is compose-only — the app never
@@ -95,21 +113,63 @@ unless you pass `--log-opt`.
 
 ## Deploying behind a corporate proxy
 
-Egress proxy is runtime configuration, not a code concern — set
-`HTTPS_PROXY`/`NO_PROXY` in the container environment. If your proxy
-intercepts TLS, add its CA in a thin derived image and point `requests` at
-the system store (note: `requests` trusts only its bundled certifi by
-default and ignores `SSL_CERT_FILE` — use `REQUESTS_CA_BUNDLE`). The image
-runs as non-root user `app`, so installing the CA needs a temporary root:
+The egress proxy is runtime configuration: set `HTTPS_PROXY` / `NO_PROXY` in
+the container environment (`.env`), and AbuseIPDB traffic goes through it.
 
-```dockerfile
-FROM ghcr.io/janwychowaniak/abuseipdb-proxy:0.1.1
-USER root
-COPY corp-ca.crt /usr/local/share/ca-certificates/
-RUN update-ca-certificates
-ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
-USER app
-```
+If the proxy intercepts TLS, give the service its certificate authority with
+`CA_FILE`, and run the published image unchanged:
+
+1. Put the proxy's CA certificate, in PEM, next to the compose files as
+   `ca.pem`: its root or, where the proxy signs with an intermediate, the
+   issuing chain (several certificates may share the file). The service runs
+   as uid 10001, so the file must be readable by it; a CA certificate is
+   public material, so mode `0644` is the natural choice.
+2. Start with the overlay that mounts the file read-only and sets the
+   variable (Compose v2):
+
+   ```bash
+   docker compose -f compose.yml -f compose.ca.yml up -d
+   ```
+
+   Without `ca.pem`, `up` fails at the mount instead of creating anything.
+
+   The legacy `docker-compose` 1.x rejects `create_host_path`. With it, use
+   the short bind syntax in an overlay of your own instead:
+
+   ```yaml
+   services:
+     abuseipdb-proxy:
+       environment:
+         CA_FILE: /etc/abuseipdb-proxy/ca.pem
+       volumes:
+         - ./ca.pem:/etc/abuseipdb-proxy/ca.pem:ro
+   ```
+
+   Without `ca.pem`, Docker then creates a root-owned directory of that name
+   and the service refuses to start with `not a regular file`, so put the
+   file in place before `up`.
+
+`GET /health` then says `"extra_ca": true`, and the log holds one
+`ca_file_loaded` line with the number of certificates loaded. A file that
+cannot be used stops the start with one line on stderr, for example
+`CA_FILE: no such file: /etc/abuseipdb-proxy/ca.pem`. If the file lacks the
+authority the proxy signs with, lookups fail with `504`
+`upstream-timeout: upstream unreachable (SSLError)`.
+
+The certificates are trusted **in addition to** the default ones, never
+instead of them. *`CA_FILE` adds trust for TLS with AbuseIPDB, directly or
+through a proxy tunnel; the TLS with an `https://` proxy endpoint itself
+keeps the client's default trust (certifi's bundle, or what
+`REQUESTS_CA_BUNDLE` selects).*
+
+Verification is never switched off: the authority, and the certificates the
+proxy issues under it, must pass Python's strict X.509 checks — CA basic
+constraints, a key usage that permits certificate signing, key identifiers,
+and subject alternative names on the issued certificates.
+
+`REQUESTS_CA_BUNDLE` still works as a wholesale replacement of the default
+bundle; `CA_FILE` adds to whatever it selects. (`requests` ignores
+`SSL_CERT_FILE`.)
 
 ## Development
 
