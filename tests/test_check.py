@@ -1,5 +1,7 @@
 """Envelope, D1/D2/D5/D6 semantics against real captures."""
 
+from importlib.metadata import version
+
 from fastapi.testclient import TestClient
 
 from abuseipdb_proxy.app import create_app
@@ -127,5 +129,10 @@ def test_upstream_receives_key_and_timeout(client, fake_upstream, settings):
 def test_health_no_upstream(client, fake_upstream):
     resp = client.get("/health")
     assert resp.status_code == 200
-    assert resp.json() == {"status": "ok"}
+    assert resp.json() == {
+        "status": "ok",
+        "name": "abuseipdb-proxy",
+        "version": version("abuseipdb-proxy"),
+        "extra_ca": False,
+    }
     assert fake_upstream.calls == []

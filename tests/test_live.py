@@ -31,4 +31,6 @@ def test_live_check_shape():
 def test_live_health():
     from abuseipdb_proxy.app import create_app
 
-    assert TestClient(create_app()).get("/health").json() == {"status": "ok"}
+    body = TestClient(create_app()).get("/health").json()
+    assert body["status"] == "ok"
+    assert set(body) == {"status", "name", "version", "extra_ca"}

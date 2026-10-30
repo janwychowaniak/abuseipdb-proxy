@@ -63,6 +63,7 @@ def settings() -> Settings:
         max_age_days=30,
         upstream_timeout_s=5,
         abuseipdb_base_url="https://api.abuseipdb.com/api/v2",
+        ca_file=None,
     )
 
 

@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     # For tests and mocks: replaces the prefix up to and including /api/v2; the
     # service appends /check, so it still calls CHECK only (SPEC §1, §4).
     abuseipdb_base_url: str = "https://api.abuseipdb.com/api/v2"
+    # Only a path here: the file is checked in the app factory, so that a refusal
+    # is one line of the service's own (SPEC D9). Unset or empty means absent.
+    ca_file: str | None = None
 
     @field_validator("abuseipdb_api_key")
     @classmethod
