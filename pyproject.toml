@@ -38,4 +38,5 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 testpaths = ["tests"]
 markers = [
     "live: hits the real AbuseIPDB API; runs only when ABUSEIPDB_LIVE_TESTS=1 (SPEC §6)",
+    "loopback: may connect to numeric loopback addresses only, 127.0.0.0/8 and ::1 (SPEC §6)",
 ]

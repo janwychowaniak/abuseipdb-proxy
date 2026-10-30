@@ -12,7 +12,9 @@
   `requests` with an explicit timeout on every upstream call (SPEC D7).
 - **English only** for everything that lands in the repository.
 - **Tests are offline**: no network, no key; upstream faked from
-  `docs/research/captures/`. Never weaken the network guard in conftest.
+  `docs/research/captures/`. The network guard in conftest fails every
+  connection; tests marked `loopback` may connect to numeric loopback
+  addresses only (`127.0.0.0/8`, `::1`). Never widen it beyond that.
 - **`docs/research/captures/` are frozen fixtures**: tests assert their
   exact values. Never overwrite an existing capture — a fresh capture gets a
   fresh file name.

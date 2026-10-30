@@ -1,5 +1,6 @@
 """Shared fixtures: offline enforcement, capture-backed fake upstream (SPEC §6)."""
 
+import ipaddress
 import json
 import socket
 from pathlib import Path
@@ -15,16 +16,40 @@ from abuseipdb_proxy.settings import Settings
 CAPTURES = Path(__file__).resolve().parents[1] / "docs" / "research" / "captures"
 
 
+def admitted_by_guard(address: object) -> bool:
+    """A numeric loopback address, in any shape connect() receives (SPEC §6).
+
+    AF_INET passes (host, port), AF_INET6 the same with flowinfo and scope_id
+    optionally appended; an AF_UNIX path (str or bytes) is never admitted. A name
+    such as "localhost" is not numeric and is refused: urllib3 resolves names
+    itself before it connects, so the TLS tests never pass one.
+    """
+    if not (isinstance(address, tuple) and len(address) >= 2 and isinstance(address[0], str)):
+        return False
+    try:
+        return ipaddress.ip_address(address[0]).is_loopback
+    except ValueError:
+        return False
+
+
 @pytest.fixture(autouse=True)
 def _no_network(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
-    """SPEC §6: a single mock miss must never make a real network call."""
+    """SPEC §6: a single mock miss must never make a real network call.
+
+    Tests marked `loopback` may connect to numeric loopback addresses, and
+    nowhere else; every other test may connect nowhere.
+    """
     if request.node.get_closest_marker("live"):
         return
+    loopback = request.node.get_closest_marker("loopback") is not None
+    connect = socket.socket.connect
 
-    def _blocked(self: socket.socket, *args: object) -> None:
+    def _guarded(self: socket.socket, address: object) -> None:
+        if loopback and admitted_by_guard(address):
+            return connect(self, address)
         raise AssertionError("offline test attempted a real network connection (SPEC §6)")
 
-    monkeypatch.setattr(socket.socket, "connect", _blocked)
+    monkeypatch.setattr(socket.socket, "connect", _guarded)
 
 
 @pytest.fixture
