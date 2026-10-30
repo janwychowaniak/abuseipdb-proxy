@@ -37,6 +37,10 @@ it. When touching behavior, cite the decision you are implementing.
 - Release: the procedure is the Release section below (SPEC §8).
 - Secret hygiene: gitleaks hooks are active via `core.hooksPath=.githooks`
   (per-clone setting); the CI gitleaks scan is the non-bypassable layer.
+  GitHub disables that workflow after 60 days without repository activity
+  (`disabled_inactivity`), and a disabled workflow scans no pushes either:
+  after a pause, check `gh workflow list --all` before the first push.
+  Re-enabling it (`gh workflow enable gitleaks`) needs the maintainer's word.
 
 ## Release
 
