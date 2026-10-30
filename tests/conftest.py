@@ -62,6 +62,7 @@ def settings() -> Settings:
         score_threshold=30,
         max_age_days=30,
         upstream_timeout_s=5,
+        abuseipdb_base_url="https://api.abuseipdb.com/api/v2",
     )
 
 

@@ -2,8 +2,10 @@
 
 ## Hard constraints (never violate)
 
-- **Read-only upstream**: the service calls only `GET /api/v2/check` on
-  AbuseIPDB — never REPORT or any other mutating endpoint.
+- **Read-only upstream**: the service calls only the CHECK endpoint,
+  `GET <base>/check`, at the configured base URL (default
+  `https://api.abuseipdb.com/api/v2`; `ABUSEIPDB_BASE_URL` overrides it for
+  tests and mocks) — never REPORT or any other mutating endpoint.
 - **Localhost-only**: the port is published on `127.0.0.1` exclusively; no
   caller authentication, by design.
 - **API key lives in the environment only** (`.env`, never committed;

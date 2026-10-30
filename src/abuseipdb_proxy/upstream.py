@@ -9,8 +9,6 @@ import requests
 
 from abuseipdb_proxy.settings import Settings
 
-CHECK_URL = "https://api.abuseipdb.com/api/v2/check"
-
 _session = requests.Session()
 
 
@@ -25,7 +23,7 @@ def check(
         params["verbose"] = ""
     timeout = settings.upstream_timeout_s
     return _session.get(
-        CHECK_URL,
+        f"{settings.abuseipdb_base_url}/check",
         headers={
             "Key": settings.abuseipdb_api_key.get_secret_value(),
             "Accept": "application/json",
