@@ -15,6 +15,36 @@ The image Id is what a host compares after `docker load` of a release file.
 On Docker's default `overlay2` image store, it is the digest of the image's
 configuration, which the archive carries byte for byte (see the README).
 
+## 0.3.0 — (pending: the date of the tag)
+
+`ghcr.io/janwychowaniak/abuseipdb-proxy@sha256:` (pending: from the release
+workflow's step summary)
+
+Image Id (configuration digest) `sha256:` (pending), after a pull and after
+`docker load` of the release file alike. Python (pending).
+
+An opt-out of Python's strict X.509 checks, for an authority that cannot
+conform.
+
+- X509_STRICT (new, optional, default true): with false, the service clears
+  ssl.VERIFY_X509_STRICT, and only that flag, on the TLS context it verifies
+  AbuseIPDB with, directly or through a proxy tunnel; the TLS of an https://
+  proxy endpoint itself keeps its default checks. Verification stays on: the
+  chain is still verified against the trusted authorities, CA_FILE included,
+  and the hostname is still checked. The values are true and false, in any
+  letter case, with surrounding whitespace ignored; unset or empty means true,
+  and any other value refuses the start with one line naming X509_STRICT.
+- GET /health gains "x509_strict", the state the TLS context carries; a start
+  with false logs one x509_strict_disabled warning.
+- A failed verification that only the strict checks cause still answers 504
+  upstream-timeout:; while the checks are on, its detail now names OpenSSL's
+  reason and points at X509_STRICT.
+
+Unset, the checks are those 0.2.0 ran; only the message of a failure they
+cause grows. Unchanged: the /check endpoint and its response, the error
+contract (statuses and detail prefixes), CA_FILE, the proxy variables, and the
+non-root, classic-builder-compatible image.
+
 ## 0.2.0 — 2026-10-30
 
 `ghcr.io/janwychowaniak/abuseipdb-proxy@sha256:0f25e661103f0f7ac1e71d255ee0984a53138e87a2fceb59c353aaeefc8278f1`
