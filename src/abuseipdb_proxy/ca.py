@@ -10,8 +10,6 @@ import re
 import ssl
 import stat
 
-from urllib3.util.ssl_ import create_urllib3_context
-
 # The loader takes PEM text as ASCII only (cadata=str), while OpenSSL's own file
 # loader reads bytes. A leading UTF-8 BOM is dropped, as OpenSSL drops it, and
 # every other non-ASCII byte becomes "?": outside a PEM block that changes
@@ -57,15 +55,3 @@ def load_ca_file(path: str) -> tuple[str, int]:
     if count == 0:
         raise CAFileError(f"CA_FILE: no certificate could be loaded (none found): {path}")
     return pem, count
-
-
-def union_context(pem: str) -> ssl.SSLContext:
-    """urllib3's own default context, plus the certificates in pem (SPEC D9).
-
-    The default set is not loaded here: requests hands every pool the bundle it
-    resolves as ca_certs, and urllib3 loads that into this context at connect
-    time, so the trust is exactly that bundle plus the file.
-    """
-    context = create_urllib3_context()
-    context.load_verify_locations(cadata=pem)
-    return context

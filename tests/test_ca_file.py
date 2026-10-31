@@ -5,20 +5,14 @@ Certificates are generated per run (trustme) and never committed. The TLS
 upstream and the CONNECT proxy listen on loopback only, the upstream answers
 with a frozen capture, and every request goes through the client a deployment
 builds: the module-level session, with the adapter create_app mounts on it.
+The helpers live in conftest.py, shared with the X509_STRICT tests.
 """
 
 import json
 import os
 import re
-import socket
-import socketserver
 import ssl
-import subprocess
-import sys
-import threading
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager, suppress
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from collections.abc import Callable
 from importlib.metadata import version
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -28,163 +22,24 @@ import pytest
 import requests
 import requests.adapters
 import trustme
-from conftest import CAPTURES
-from fastapi.testclient import TestClient
+from conftest import (
+    API_KEY,
+    NO_UPSTREAM,
+    assert_reached,
+    assert_refused,
+    connect_proxy,
+    leaf_from,
+    pem_file,
+    run_entrypoint,
+    service,
+    tls_upstream,
+)
+from urllib3.util.ssl_ import create_urllib3_context
 
 from abuseipdb_proxy import upstream
-from abuseipdb_proxy.app import create_app
 from abuseipdb_proxy.ca import CAFileError, load_ca_file
-from abuseipdb_proxy.settings import Settings
 
-API_KEY = "test-key-never-printed"
-NO_UPSTREAM = "https://upstream.invalid/api/v2"  # for tests that make no lookup
-LOOKUP = "/check/87.98.154.146"  # the address midscore-default.json answers for
-CAPTURE = json.loads((CAPTURES / "midscore-default.json").read_text())["response"]
-# what the client takes from the environment: proxies, and a bundle replacing certifi's
-CLIENT_ENV = (
-    "HTTP_PROXY",
-    "HTTPS_PROXY",
-    "ALL_PROXY",
-    "NO_PROXY",
-    "http_proxy",
-    "https_proxy",
-    "all_proxy",
-    "no_proxy",
-    "REQUESTS_CA_BUNDLE",
-    "CURL_CA_BUNDLE",
-)
-# the service's own configuration, kept out of a subprocess unless a test sets it
-SERVICE_ENV = (
-    "ABUSEIPDB_API_KEY",
-    "SCORE_THRESHOLD",
-    "MAX_AGE_DAYS",
-    "UPSTREAM_TIMEOUT_S",
-    "ABUSEIPDB_BASE_URL",
-    "CA_FILE",
-)
-
-
-@pytest.fixture(autouse=True)
-def isolated_client(monkeypatch: pytest.MonkeyPatch) -> None:
-    for name in CLIENT_ENV:
-        monkeypatch.delenv(name, raising=False)
-    # The production session lives as long as the process; a test must not
-    # inherit the adapter another test's create_app mounted on it.
-    monkeypatch.setattr(upstream, "_session", requests.Session())
-
-
-class _Capture(BaseHTTPRequestHandler):
-    """Answers every GET with the frozen capture, as AbuseIPDB answered it."""
-
-    def do_GET(self) -> None:
-        body = json.dumps(CAPTURE["body"]).encode()
-        self.send_response(CAPTURE["status"])
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def log_message(self, *args: object) -> None:  # keep the test output clean
-        pass
-
-
-@contextmanager
-def tls_upstream(leaf: trustme.LeafCert) -> Iterator[str]:
-    """An HTTPS upstream on loopback presenting `leaf`; yields its base URL."""
-    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    leaf.configure_cert(context)
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _Capture)
-    server.socket = context.wrap_socket(server.socket, server_side=True)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    try:
-        yield f"https://127.0.0.1:{server.server_address[1]}/api/v2"
-    finally:
-        server.shutdown()
-        server.server_close()
-
-
-def _pipe(source: socket.socket, sink: socket.socket) -> None:
-    with suppress(OSError):
-        while data := source.recv(65536):
-            sink.sendall(data)
-    with suppress(OSError):
-        sink.shutdown(socket.SHUT_WR)
-
-
-class _ConnectRelay(socketserver.BaseRequestHandler):
-    """A plain http:// egress proxy: CONNECT, then bytes both ways, unread."""
-
-    def handle(self) -> None:
-        head = b""
-        while b"\r\n\r\n" not in head:
-            chunk = self.request.recv(4096)
-            if not chunk:
-                return
-            head += chunk
-        method, target, _ = head.split(b"\r\n", 1)[0].decode().split(" ", 2)
-        self.server.seen.append(f"{method} {target}")
-        host, port = target.rsplit(":", 1)
-        with socket.create_connection((host, int(port)), timeout=10) as far:
-            self.request.sendall(b"HTTP/1.1 200 Connection established\r\n\r\n")
-            back = threading.Thread(target=_pipe, args=(far, self.request), daemon=True)
-            back.start()
-            _pipe(self.request, far)
-            back.join(timeout=10)
-
-
-class _ConnectProxy(socketserver.ThreadingTCPServer):
-    daemon_threads = True
-
-    def __init__(self) -> None:
-        super().__init__(("127.0.0.1", 0), _ConnectRelay)
-        self.seen: list[str] = []
-
-
-@contextmanager
-def connect_proxy() -> Iterator[tuple[str, list[str]]]:
-    """A CONNECT proxy on loopback; yields its URL and the request lines it saw."""
-    server = _ConnectProxy()
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    try:
-        yield f"http://127.0.0.1:{server.server_address[1]}", server.seen
-    finally:
-        server.shutdown()
-        server.server_close()
-
-
-def leaf_from(ca: trustme.CA) -> trustme.LeafCert:
-    return ca.issue_cert("127.0.0.1")
-
-
-def pem_file(path: Path, *blobs: trustme.Blob) -> str:
-    path.write_bytes(b"".join(blob.bytes() for blob in blobs))
-    return str(path)
-
-
-def service(base_url: str, ca_file: str | None = None) -> TestClient:
-    """The service as a deployment builds it: settings in, the real session out."""
-    settings = Settings(
-        _env_file=None,
-        abuseipdb_api_key=API_KEY,
-        score_threshold=30,
-        max_age_days=30,
-        upstream_timeout_s=5,
-        abuseipdb_base_url=base_url,
-        ca_file=ca_file,
-    )
-    return TestClient(create_app(settings))
-
-
-def assert_reached(client: TestClient) -> None:
-    response = client.get(LOOKUP)
-    assert response.status_code == 200
-    assert response.json()["verdict"] == {"score": 30, "thresh_gte": True}  # the capture's
-
-
-def assert_refused(client: TestClient) -> None:
-    response = client.get(LOOKUP)
-    assert response.status_code == 504  # the transport-error path, as for any failed TLS
-    assert response.json()["detail"].startswith("upstream-timeout:")
+pytestmark = pytest.mark.usefixtures("isolated_client")
 
 
 def assert_union(ca_file: str, default: trustme.CA, extra: trustme.CA) -> None:
@@ -267,6 +122,59 @@ def test_without_ca_file_the_tunnel_is_refused(monkeypatch):
     assert seen == [f"CONNECT 127.0.0.1:{urlsplit(url).port}"]
 
 
+# --- the context in every configuration ------------------------------------------------
+#
+# The adapter is mounted with or without CA_FILE, so that a setting on the context has one
+# to act on. Without the file it must change nothing: the context is urllib3's own, and the
+# trust is exactly the bundle requests resolves.
+
+
+def context_attributes(context: ssl.SSLContext) -> dict[str, object]:
+    return {
+        "verify_flags": context.verify_flags,
+        "verify_mode": context.verify_mode,
+        "check_hostname": context.check_hostname,
+        "hostname_checks_common_name": context.hostname_checks_common_name,
+        "options": context.options,
+        "minimum_version": context.minimum_version,
+        "maximum_version": context.maximum_version,
+        "security_level": context.security_level,
+        "ciphers": len(context.get_ciphers()),
+        "store": context.cert_store_stats(),
+    }
+
+
+def test_without_ca_file_the_adapter_hands_urllib3s_own_context_to_the_pools():
+    service(NO_UPSTREAM)
+    adapter = upstream._session.get_adapter(NO_UPSTREAM)
+    assert isinstance(adapter, upstream._ContextAdapter)
+    context = adapter.poolmanager.connection_pool_kw["ssl_context"]
+    assert context_attributes(context) == context_attributes(create_urllib3_context())
+
+
+@pytest.mark.loopback
+def test_without_ca_file_the_trust_is_the_bundle_requests_ca_bundle_selects(tmp_path, monkeypatch):
+    default = trustme.CA()
+    monkeypatch.setenv("REQUESTS_CA_BUNDLE", pem_file(tmp_path / "bundle.pem", default.cert_pem))
+    with tls_upstream(leaf_from(default)) as url:
+        assert_reached(service(url))
+    with tls_upstream(leaf_from(trustme.CA())) as url:
+        assert_refused(service(url))
+
+
+@pytest.mark.loopback
+def test_without_ca_file_the_trust_is_the_default_bundle_on_the_deployment_path(
+    tmp_path, monkeypatch
+):
+    default = trustme.CA()
+    bundle = pem_file(tmp_path / "default.pem", default.cert_pem)
+    monkeypatch.setattr(requests.adapters, "DEFAULT_CA_BUNDLE_PATH", bundle)
+    with tls_upstream(leaf_from(default)) as url:
+        assert_reached(service(url))
+    with tls_upstream(leaf_from(trustme.CA())) as url:
+        assert_refused(service(url))
+
+
 # --- refusals --------------------------------------------------------------------------
 
 
@@ -323,19 +231,6 @@ def test_a_file_without_a_loadable_certificate_refuses_the_start(tmp_path, conte
 
 
 # --- the real entrypoint ---------------------------------------------------------------
-
-
-def run_entrypoint(cwd: Path, **env: str) -> subprocess.CompletedProcess[str]:
-    """The image's command, with only `env` of the service's own configuration."""
-    inherited = {name: value for name, value in os.environ.items() if name not in SERVICE_ENV}
-    return subprocess.run(
-        [sys.executable, "-m", "uvicorn", "--factory", "abuseipdb_proxy.app:create_app"],
-        cwd=cwd,  # no .env here: only this environment reaches the settings
-        env=inherited | env,
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
 
 
 def test_the_refusal_is_the_only_output_of_the_real_entrypoint(tmp_path):

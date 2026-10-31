@@ -16,14 +16,15 @@ from abuseipdb_proxy.settings import Settings
 _session = requests.Session()
 
 
-class _ExtraCAAdapter(HTTPAdapter):
+class _ContextAdapter(HTTPAdapter):
     """Hands one TLS context to every pool, direct and tunnelled (SPEC D9).
 
-    requests still sets the default bundle it resolves as each pool's ca_certs,
-    and urllib3 loads that into this context at connect time, so the trust is
-    the default set plus CA_FILE. The TLS with an https:// proxy endpoint itself
-    takes urllib3's separate proxy_ssl_context, left unset, and keeps the default
-    trust. Everything else, max_retries=0 included (D8), is requests' default.
+    requests still sets the bundle it resolves as each pool's ca_certs, and
+    urllib3 loads that into this context at connect time, so the trust is that
+    bundle, plus CA_FILE when it is set. The TLS with an https:// proxy endpoint
+    itself takes urllib3's separate proxy_ssl_context, left unset, and keeps the
+    default trust. Everything else, max_retries=0 included (D8), is requests'
+    default.
     """
 
     def __init__(self, ssl_context: ssl.SSLContext) -> None:
@@ -41,9 +42,10 @@ class _ExtraCAAdapter(HTTPAdapter):
         return super().proxy_manager_for(proxy, **proxy_kwargs)
 
 
-def trust_extra_ca(context: ssl.SSLContext) -> None:
-    """CA_FILE is in use: route https:// of the one session through its context."""
-    _session.mount("https://", _ExtraCAAdapter(context))
+def use_context(context: ssl.SSLContext) -> None:
+    """Route https:// of the one session through the upstream TLS context, in every
+    configuration (SPEC D9)."""
+    _session.mount("https://", _ContextAdapter(context))
 
 
 def check(

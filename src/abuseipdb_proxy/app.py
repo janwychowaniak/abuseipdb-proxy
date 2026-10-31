@@ -14,7 +14,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from abuseipdb_proxy import ca, upstream
+from abuseipdb_proxy import ca, tls, upstream
 from abuseipdb_proxy.ipcheck import InvalidIPError, validate_ip
 from abuseipdb_proxy.jsonlog import configure_logging
 from abuseipdb_proxy.settings import Settings
@@ -62,29 +62,31 @@ def _remaining(resp: requests.Response) -> int | None:
     return int(raw) if raw.isdigit() else None
 
 
-def _extra_ca(path: str | None) -> bool:
-    """Trust CA_FILE in addition to the default set; False when unset or empty (D9).
+def _ca_file(path: str | None) -> str | None:
+    """The PEM text of CA_FILE, or None when it is unset or empty (D9).
 
     A file that cannot be used ends the process here: uvicorn prints a SystemExit
     carrying the refusal line and nothing else, so that line is the only output.
     """
     if not path:
-        return False
+        return None
     try:
         pem, count = ca.load_ca_file(path)
     except ca.CAFileError as exc:
         raise SystemExit(str(exc)) from None
-    upstream.trust_extra_ca(ca.union_context(pem))
     logger.info(
         "ca_file_loaded", extra={"event": "ca_file_loaded", "path": path, "certificates": count}
     )
-    return True
+    return pem
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
     configure_logging()
-    extra_ca = _extra_ca(settings.ca_file)
+    pem = _ca_file(settings.ca_file)
+    # One context in every configuration, with or without CA_FILE (D9).
+    upstream.use_context(tls.upstream_context(pem))
+    extra_ca = pem is not None
     package = metadata("abuseipdb-proxy")
     name, version = package["Name"], package["Version"]
     app = FastAPI(title="abuseipdb-proxy", docs_url=None, redoc_url=None)
