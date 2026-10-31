@@ -75,6 +75,7 @@ def settings() -> Settings:
         upstream_timeout_s=5,
         abuseipdb_base_url="https://api.abuseipdb.com/api/v2",
         ca_file=None,
+        x509_strict=None,
     )
 
 
@@ -185,6 +186,7 @@ SERVICE_ENV = (
     "UPSTREAM_TIMEOUT_S",
     "ABUSEIPDB_BASE_URL",
     "CA_FILE",
+    "X509_STRICT",
 )
 
 
@@ -265,12 +267,22 @@ class _ConnectProxy(socketserver.ThreadingTCPServer):
 
 
 @contextmanager
-def connect_proxy() -> Iterator[tuple[str, list[str]]]:
-    """A CONNECT proxy on loopback; yields its URL and the request lines it saw."""
+def connect_proxy(tls: trustme.LeafCert | None = None) -> Iterator[tuple[str, list[str]]]:
+    """A CONNECT proxy on loopback; yields its URL and the request lines it saw.
+
+    With `tls`, the proxy endpoint itself speaks TLS, presenting that certificate: an
+    https:// proxy, whose own TLS the client verifies before it sends CONNECT.
+    """
     server = _ConnectProxy()
+    scheme = "http"
+    if tls is not None:
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        tls.configure_cert(context)
+        server.socket = context.wrap_socket(server.socket, server_side=True)
+        scheme = "https"
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
-        yield f"http://127.0.0.1:{server.server_address[1]}", server.seen
+        yield f"{scheme}://127.0.0.1:{server.server_address[1]}", server.seen
     finally:
         server.shutdown()
         server.server_close()
@@ -285,9 +297,11 @@ def pem_file(path: Path, *blobs: trustme.Blob) -> str:
     return str(path)
 
 
-def service(base_url: str, ca_file: str | None = None) -> TestClient:
-    """The service as a deployment builds it: settings in, the real session out."""
-    settings = Settings(
+def settings_for(
+    base_url: str, ca_file: str | None = None, x509_strict: str | None = None
+) -> Settings:
+    """Explicit settings only: neither .env nor the environment reaches them."""
+    return Settings(
         _env_file=None,
         abuseipdb_api_key=API_KEY,
         score_threshold=30,
@@ -295,8 +309,15 @@ def service(base_url: str, ca_file: str | None = None) -> TestClient:
         upstream_timeout_s=5,
         abuseipdb_base_url=base_url,
         ca_file=ca_file,
+        x509_strict=x509_strict,
     )
-    return TestClient(create_app(settings))
+
+
+def service(
+    base_url: str, ca_file: str | None = None, x509_strict: str | None = None
+) -> TestClient:
+    """The service as a deployment builds it: settings in, the real session out."""
+    return TestClient(create_app(settings_for(base_url, ca_file, x509_strict)))
 
 
 def assert_reached(client: TestClient) -> None:

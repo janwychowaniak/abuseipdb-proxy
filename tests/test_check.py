@@ -134,5 +134,6 @@ def test_health_no_upstream(client, fake_upstream):
         "name": "abuseipdb-proxy",
         "version": version("abuseipdb-proxy"),
         "extra_ca": False,
+        "x509_strict": True,
     }
     assert fake_upstream.calls == []

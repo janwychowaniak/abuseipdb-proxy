@@ -25,9 +25,9 @@ jobs:
       # The smoke tests below then use the image the archive loaded back.
       - name: Archive round trip (save by tag, check Config, remove, load, compare Id)
         run: .github/scripts/archive-image.sh abuseipdb-proxy ci -
-      # Both smoke tests: a read-only root filesystem and no tmpfs, since the
-      # service writes nothing, with or without CA_FILE (SPEC §8). A dummy key:
-      # /health and local validation never reach upstream.
+      # All three smoke tests: a read-only root filesystem and no tmpfs, since
+      # the service writes nothing, with or without CA_FILE and X509_STRICT
+      # (SPEC §8). A dummy key: /health and local validation never reach upstream.
       - name: Smoke-test read-only, without CA_FILE
         run: |
           docker run -d --name smoke --read-only -e ABUSEIPDB_API_KEY=ci-dummy-key \
@@ -41,6 +41,7 @@ jobs:
           echo "$health"
           grep -q '"status":"ok"' <<< "$health"
           grep -q '"extra_ca":false' <<< "$health"
+          grep -q '"x509_strict":true' <<< "$health"
           code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/check/10.0.0.1)
           test "$code" = 400  # rejected locally (D3), no upstream involved
           docker rm -f smoke
@@ -63,6 +64,7 @@ jobs:
             echo "::error::/health never came up"; docker logs smoke-ca; exit 1; }
           echo "$health"
           grep -q '"extra_ca":true' <<< "$health"
+          grep -q '"x509_strict":true' <<< "$health"
           logs=$(docker logs smoke-ca 2>&1)
           loaded=$(grep '"event": "ca_file_loaded"' <<< "$logs") || {
             echo "::error::no ca_file_loaded line"; echo "$logs"; exit 1; }
@@ -70,3 +72,22 @@ jobs:
           test "$(wc -l <<< "$loaded")" = 1
           grep -q '"certificates": 1' <<< "$loaded"
           docker rm -f smoke-ca
+      - name: Smoke-test read-only, with X509_STRICT=false
+        run: |
+          docker run -d --name smoke-strict --read-only -p 127.0.0.1:8002:8000 \
+            -e ABUSEIPDB_API_KEY=ci-dummy-key -e X509_STRICT=false abuseipdb-proxy:ci
+          for _ in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8002/health > /dev/null 2>&1 && break
+            sleep 1
+          done
+          health=$(curl -fsS http://127.0.0.1:8002/health) || {
+            echo "::error::/health never came up"; docker logs smoke-strict; exit 1; }
+          echo "$health"
+          grep -q '"x509_strict":false' <<< "$health"
+          logs=$(docker logs smoke-strict 2>&1)
+          disabled=$(grep '"event": "x509_strict_disabled"' <<< "$logs") || {
+            echo "::error::no x509_strict_disabled line"; echo "$logs"; exit 1; }
+          echo "$disabled"
+          test "$(wc -l <<< "$disabled")" = 1
+          grep -q '"level": "WARNING"' <<< "$disabled"
+          docker rm -f smoke-strict

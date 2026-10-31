@@ -270,6 +270,7 @@ def test_without_ca_file_health_says_false_and_no_line_is_logged(capsys):
         "name": "abuseipdb-proxy",
         "version": version("abuseipdb-proxy"),
         "extra_ca": False,
+        "x509_strict": True,
     }
     assert startup_lines(capsys.readouterr().out) == []
 

@@ -33,4 +33,4 @@ def test_live_health():
 
     body = TestClient(create_app()).get("/health").json()
     assert body["status"] == "ok"
-    assert set(body) == {"status", "name", "version", "extra_ca"}
+    assert set(body) == {"status", "name", "version", "extra_ca", "x509_strict"}

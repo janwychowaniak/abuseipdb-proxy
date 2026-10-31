@@ -2,7 +2,8 @@
 
 Run: uvicorn --factory abuseipdb_proxy.app:create_app
 The factory instantiates Settings eagerly, so a misconfigured process dies
-before the server binds (SPEC §4); CA_FILE is checked right after (D9).
+before the server binds (SPEC §4); X509_STRICT and then CA_FILE are checked
+right after (D10, D9).
 """
 
 import logging
@@ -62,6 +63,18 @@ def _remaining(resp: requests.Response) -> int | None:
     return int(raw) if raw.isdigit() else None
 
 
+def _x509_strict(value: str | None) -> bool:
+    """X509_STRICT as a boolean; unset or empty means true (D10).
+
+    A value that is neither true nor false ends the process here, the way a
+    CA_FILE that cannot be used does.
+    """
+    try:
+        return tls.parse_x509_strict(value)
+    except tls.X509StrictError as exc:
+        raise SystemExit(str(exc)) from None
+
+
 def _ca_file(path: str | None) -> str | None:
     """The PEM text of CA_FILE, or None when it is unset or empty (D9).
 
@@ -83,9 +96,14 @@ def _ca_file(path: str | None) -> str | None:
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
     configure_logging()
+    strict = _x509_strict(settings.x509_strict)  # before CA_FILE is read (D10)
     pem = _ca_file(settings.ca_file)
-    # One context in every configuration, with or without CA_FILE (D9).
-    upstream.use_context(tls.upstream_context(pem))
+    # One context in every configuration, with or without CA_FILE (D9), carrying
+    # the flag X509_STRICT decides (D10).
+    context = tls.upstream_context(pem, strict)
+    upstream.use_context(context)
+    if not strict:
+        logger.warning("x509_strict_disabled", extra={"event": "x509_strict_disabled"})
     extra_ca = pem is not None
     package = metadata("abuseipdb-proxy")
     name, version = package["Name"], package["Version"]
@@ -103,8 +121,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/health")
     def health() -> dict[str, object]:
-        # Liveness only: no upstream call, no key use (SPEC §3).
-        return {"status": "ok", "name": name, "version": version, "extra_ca": extra_ca}
+        # Liveness only: no upstream call, no key use (SPEC §3). x509_strict is
+        # read from the upstream context itself, not from the setting (D10).
+        return {
+            "status": "ok",
+            "name": name,
+            "version": version,
+            "extra_ca": extra_ca,
+            "x509_strict": tls.is_strict(context),
+        }
 
     @app.get("/check/{ip}")
     def check(
@@ -137,6 +162,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 else f"upstream unreachable ({type(exc).__name__})"
             )
             detail = f"upstream-timeout: {kind}"
+            if tls.is_strict(context):
+                # D10: a failure only the strict X.509 checks cause names its reason
+                detail += tls.strict_hint(exc)
             _log_check(504, ip, eff, normalized=canonical, upstream_ms=elapsed, detail=detail)
             raise HTTPException(status_code=504, detail=detail) from None
         elapsed = int((time.perf_counter() - started) * 1000)

@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     # Only a path here: the file is checked in the app factory, so that a refusal
     # is one line of the service's own (SPEC D9). Unset or empty means absent.
     ca_file: str | None = None
+    # Only text here, for the same reason: the app factory parses it (SPEC D10).
+    # Unset or empty means true.
+    x509_strict: str | None = None
 
     @field_validator("abuseipdb_api_key")
     @classmethod
