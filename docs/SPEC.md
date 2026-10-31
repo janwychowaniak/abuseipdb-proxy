@@ -9,7 +9,9 @@ numbered decisions (D1…) with rationale; empirical claims cite
 `docs/research/captures/`. Revision 2 incorporates the pre-implementation
 three-lens subagent audit (2026-08-10). Revision 3 adds D9, extra CA trust
 through `CA_FILE`, with the upstream base-URL override it needs for testing
-(0.2.0).
+(0.2.0). Revision 4 adds D10, `X509_STRICT`, an opt-out of Python's strict
+X.509 checks on the upstream TLS context, which the service now hands to the
+client in every configuration (0.3.0).
 
 ## 1. Hard constraints (never violate)
 
@@ -25,6 +27,10 @@ through `CA_FILE`, with the upstream base-URL override it needs for testing
   via pydantic-settings. The key never appears in logs or responses (§4
   mandates `SecretStr`; the key travels only in the upstream `Key` header,
   never in URLs, so client-library tracebacks cannot embed it).
+- **TLS verification is never switched off.** `CA_FILE` only adds
+  certificate authorities to the default trust (D9), and `X509_STRICT`
+  relaxes RFC 5280 conformance checks, never verification (D10); no setting
+  disables verification.
 - **English only** for everything that lands in the repository.
 
 ## 2. Decisions
@@ -137,17 +143,18 @@ through `CA_FILE`, with the upstream base-URL override it needs for testing
 - **D9 — Extra CA trust (`CA_FILE`).** An optional PEM file whose
   certificates are trusted **in addition to** the default trust for TLS with
   the upstream, so that a deployment behind an egress proxy that intercepts
-  TLS runs the published image unchanged. Unset or empty means absent:
-  nothing is mounted on the session, and the client is exactly as without
-  the variable. Certificate verification is never switched off, by this
-  setting or any other.
+  TLS runs the published image unchanged. Unset or empty means absent: the
+  context of the mechanism below holds no certificate of its own, and the
+  trust is exactly the bundle requests resolves. Certificate verification is
+  never switched off, by this setting or any other.
   1. **Additive.** The trust is the union of what requests resolves without
      the variable (`REQUESTS_CA_BUNDLE`, then `CURL_CA_BUNDLE`, under
      `trust_env`; otherwise certifi's bundle) and the file; nothing from the
      default set is dropped, and every other TLS default stays. Mechanism:
-     an `HTTPAdapter` on `https://` of the one session hands a single
-     context — urllib3's own `create_urllib3_context()` plus the file — to
-     its pool manager and to every proxy manager. requests still sets the
+     an `HTTPAdapter` on `https://` of the one session, mounted in every
+     configuration (D10), hands a single context — urllib3's own
+     `create_urllib3_context()`, plus the file when it is set — to its pool
+     manager and to every proxy manager. requests still sets the
      bundle it resolves as each pool's `ca_certs`, and urllib3 loads that
      into the context at connect time. The union rests on that behaviour of
      `cert_verify`, which requests 2.32.3 and 2.32.4 did not have (a
@@ -158,7 +165,8 @@ through `CA_FILE`, with the upstream base-URL override it needs for testing
      both direct and inside a CONNECT tunnel (`HTTPS_PROXY`), the case a
      deployment behind a proxy uses. It is tested, not asserted (§6).
   3. **Stated limit.** The TLS with an `https://` proxy endpoint itself keeps
-     requests' default trust: urllib3 builds it from a separate
+     requests' default trust, and the default strict checks that D10's
+     setting does not reach: urllib3 builds it from a separate
      `proxy_ssl_context`, which the adapter leaves unset.
   4. **Validation, once, at startup.** One file, read once into memory; a
      replaced file takes effect on restart. Refused: a path that does not
@@ -175,8 +183,77 @@ through `CA_FILE`, with the upstream base-URL override it needs for testing
      reported first, with its own error.
 
   A failed verification stays on D4's transport-error path: 504
-  `upstream-timeout: upstream unreachable (SSLError)`. Several files, a CA
-  directory and reloading without a restart are out of scope.
+  `upstream-timeout: upstream unreachable (SSLError)`; while the strict
+  checks are on, a failure that only they cause gets D10's hint. Several
+  files, a CA directory and reloading without a restart are out of scope.
+- **D10 — `X509_STRICT` relaxes RFC 5280 conformance, never verification.**
+  Python 3.13's default TLS context sets `ssl.VERIFY_X509_STRICT`, and
+  urllib3's `create_urllib3_context()` sets it too, so OpenSSL enforces RFC
+  5280's conformance rules on every certificate of the chain. One of them
+  requires a CA certificate to mark its Basic Constraints critical (RFC 5280
+  §4.2.1.9): an intercepting authority without the marker is refused, verify
+  code 89, even when `CA_FILE` trusts it. `X509_STRICT` is an optional
+  boolean for a deployment whose authority cannot be reissued; the default is
+  strict.
+  1. **One flag.** `false` clears `ssl.VERIFY_X509_STRICT` on the context of
+     D9, after the context is created and `CA_FILE` is loaded; `true` sets
+     it, whatever the interpreter's or the library's default. Nothing else
+     changes: the chain is still verified against the trusted authorities,
+     `CA_FILE` included, the hostname is still checked, and the other flags
+     (`VERIFY_X509_PARTIAL_CHAIN` among them), `verify_mode` and the TLS 1.2
+     minimum stay. Nothing changes the flag later: urllib3 loads bundles into
+     the context at connect time, never flags.
+  2. **One context in every configuration.** The service mounts D9's adapter
+     with its context whether or not `CA_FILE` is set, so that the setting
+     has a context to act on; without the adapter, urllib3 builds a new
+     context for every connection. Without the file the context is urllib3's
+     own default, and the trust is exactly the bundle requests resolves.
+     Measured on the 0.2.0 image and in the uv environment, the mounted
+     context equals at connect time the one urllib3 builds itself: flags,
+     verify mode, hostname check, options, versions, security level,
+     ciphers and store.
+  3. **Reach.** The setting applies to TLS with the upstream, directly and
+     inside a proxy tunnel, whatever the proxy's scheme. The TLS with an
+     `https://` proxy endpoint itself keeps its default context (D9 3).
+  4. **Values.** `true` and `false`, compared case-insensitively after
+     trimming whitespace; unset or exactly empty means `true`. Any other value
+     refuses the start (§7), `1`, `0`, `yes`, `no`, `on`, `off` and a value
+     of only whitespace included. The setting is text, parsed by the app
+     factory after the settings and before `CA_FILE` is read, so a wrong
+     value is refused before the file is touched (§4).
+  5. **Visible where an operator looks.** Health reports the flag as the
+     context carries it (§3); a relaxed start logs one warning (§7).
+  6. **Blast radius.** The relaxation reaches every chain the service
+     verifies, the public AbuseIPDB chain included, and the flag gates more
+     than Basic Constraints criticality: key identifiers, key usage and names
+     as well. It is an opt-in for an authority that cannot be reissued, not a
+     default.
+  7. **The hint.** OpenSSL raises verify codes 78 and 80–93 only under the
+     flag (`check_extensions` in `crypto/x509/x509_vfy.c`, OpenSSL 3.0 and
+     3.5); 26 and 79 occur without it too, and 94 is checked whatever the
+     flag.
+     - **When.** While the flag is set, a transport error whose exception
+       graph holds a verify error with one of those 15 codes gets
+       `; TLS: <OpenSSL's text for the code>, see X509_STRICT` appended to
+       its `detail`. Status 504 and the prefix `upstream-timeout:` stay
+       (D4), and the `check` log line carries the same text.
+     - **The graph.** It is the caught exception and every exception
+       reachable through `__cause__` and `__context__`: both links of each
+       exception, each exception once, cause first. The first verify error
+       decides.
+     - **Why both links.** One link per exception is not enough: inside a
+       proxy tunnel urllib3 raises `MaxRetryError` from an `SSLError` it
+       built but never raised, so the verify error sits on `MaxRetryError`'s
+       suppressed `__context__`.
+     - **The fallback.** Without a verify error on the graph, one of the 15
+       texts in the `str()` of an exception on it counts instead.
+     - **Not per hop.** The hint does not tell hops apart: a family failure
+       at an `https://` proxy endpoint (`ProxyError`) gets it too while the
+       flag is set, although the setting cannot reach that hop.
+
+  Out of scope: inspecting `CA_FILE`'s extensions at startup, any other
+  verify flag, per-host exceptions, and a distinct status or `detail` prefix
+  for TLS verification failures.
 
 ## 3. HTTP API
 
@@ -246,14 +323,19 @@ multi-segment path.
 ### `GET /health`
 
 `200`, with the service's name and version from the installed package
-metadata, and whether `CA_FILE` is in use (D9):
+metadata, whether `CA_FILE` is in use (D9), and whether the strict X.509
+checks are on (D10):
 
 ```json
-{ "status": "ok", "name": "abuseipdb-proxy", "version": "…", "extra_ca": false }
+{ "status": "ok", "name": "abuseipdb-proxy", "version": "…", "extra_ca": false, "x509_strict": true }
 ```
 
 `extra_ca` is always present: `true` when `CA_FILE` is loaded, `false`
-otherwise — no path, fingerprint or subject. No upstream call, no key use —
+otherwise — no path, fingerprint or subject. `x509_strict` is always
+present, after `extra_ca`. It says whether the context that verifies TLS with
+AbuseIPDB carries `ssl.VERIFY_X509_STRICT`, and it is read from that context
+itself: `false` only when `X509_STRICT=false` has cleared the flag. No
+upstream call, no key use —
 safe for container smoke-tests and liveness probes. Note `/health` proves
 the process is up and configured (settings load eagerly at startup, §4) — it
 does not probe upstream reachability.
@@ -269,6 +351,7 @@ Loaded by pydantic-settings from the environment / `.env` (12-Factor):
 | `MAX_AGE_DAYS` | no | 30 | default for `max_age_days` (1–365) |
 | `UPSTREAM_TIMEOUT_S` | no | 5 | per-call upstream timeout, seconds (> 0) |
 | `CA_FILE` | no | — (absent) | PEM file of certificate authorities trusted in addition to the default ones (D9) |
+| `X509_STRICT` | no | `true` (unset or empty) | `false` clears Python's strict X.509 checks on TLS with AbuseIPDB; verification stays on (D10) |
 | `ABUSEIPDB_BASE_URL` | no | `https://api.abuseipdb.com/api/v2` | upstream prefix up to and including `/api/v2`; for tests and mocks |
 
 - **Fail-fast, eagerly.** Settings are instantiated once at process
@@ -288,6 +371,9 @@ Loaded by pydantic-settings from the environment / `.env` (12-Factor):
 - **`CA_FILE`** is only a path in the settings, so that a refusal is the
   service's own line rather than a pydantic error: the app factory checks it
   right after the settings (D9, §7). Unset or empty means absent.
+- **`X509_STRICT`** is only text in the settings, for the same reason. The
+  app factory parses it right after the settings and before `CA_FILE`
+  (D10, §7). Unset or exactly empty means `true`.
 - **`ABUSEIPDB_BASE_URL`** must start with `http://` or `https://`, else
   startup fails like any other configuration error; one trailing `/` is
   dropped, and the service appends `/check`. It exists so that tests and
@@ -299,13 +385,14 @@ Loaded by pydantic-settings from the environment / `.env` (12-Factor):
   are fine in the dedicated container; in bare local runs, real environment
   variables override `.env` (pydantic-settings precedence), so a stray
   `SCORE_THRESHOLD` in the analyst's shell silently changes verdicts —
-  accepted, container is the deployment target. `CA_FILE` carries the
-  sibling project's name on purpose, so one compose overlay serves both
-  services.
+  accepted, container is the deployment target. `CA_FILE` and
+  `X509_STRICT` carry the sibling project's names on purpose, so one compose
+  overlay serves both services.
 - Standard proxy variables (`HTTPS_PROXY`, `NO_PROXY`, …) are honored as-is
   by `requests` — documented as a configuration contract, so a deployment
-  behind a corporate proxy needs no changes here: the proxy at runtime, and
-  its CA through `CA_FILE` (D9).
+  behind a corporate proxy needs no changes here: the proxy at runtime, its
+  CA through `CA_FILE` (D9), and, for an authority that fails the strict
+  X.509 checks, `X509_STRICT` (D10).
 
 ## 5. Upstream contract
 
@@ -317,9 +404,9 @@ D5). JSON API-style body: `data` on success, `errors[]` on failure (F7).
 
 All calls go through a single module-level `requests.Session` (connection
 pooling; safe across threadpool threads here because no cookies or
-per-request session state are used). With `CA_FILE`, its adapter is
-mounted on `https://` of that same session at startup (D9). No retries
-(D8).
+per-request session state are used). At startup, D9's adapter is mounted
+on `https://` of that same session in every configuration, and hands every
+pool the one TLS context (D9, D10). No retries (D8).
 
 Free-tier quota 1000 checks/day, tracked via `X-RateLimit-*` headers, reset
 at midnight UTC; **invalid queries also burn quota** (F8) — hence D3's
@@ -341,12 +428,17 @@ quota state, and that is intentional.
   `::1`), for TLS servers on loopback. The guard reads the address in every
   shape `connect()` receives and refuses names and `AF_UNIX` paths; its own
   tests pin both sides.
-- **TLS on loopback** (D9): the extra-CA tests run against HTTPS servers
-  and a plain CONNECT proxy on loopback, through the client a deployment
-  builds (the one session with its adapter); the upstream answers with a
-  frozen capture. Certificates are generated per run (`trustme`, dev-only)
-  and never committed. A refusal is also checked once through the real
-  entrypoint, in a subprocess.
+- **TLS on loopback** (D9, D10): the extra-CA and strict-check tests run
+  against HTTPS servers and CONNECT proxies on loopback, through the client
+  a deployment builds (the one session with its adapter); the upstream
+  answers with a frozen capture. A proxy is plain, or itself speaks TLS for
+  the `https://` proxy endpoint.
+  - Certificates are generated per run (`trustme`, dev-only) and never
+    committed. The non-conforming authority is a trustme CA re-signed with
+    `cryptography` (dev-only), with Basic Constraints and Key Usage not
+    marked critical.
+  - The refusals are also checked through the real entrypoint, in a
+    subprocess.
 - Optional live smoke tests run only when `ABUSEIPDB_LIVE_TESTS` equals the
   literal string `1`, using the real key from `.env`; excluded by default
   and in CI. Live assertions check response *shape and invariants* (types,
@@ -365,7 +457,25 @@ quota state, and that is intentional.
   and `REQUESTS_CA_BUNDLE`); the tunnel, with and without the file; every
   refusal with its exact line; the count (a leaf alone, a root the default
   set holds); reading against OpenSSL's own file loader; `extra_ca` and the
-  startup line. For §4: the base-URL override and its validation.
+  startup line; without the file, the adapter still mounted with urllib3's
+  own context, and the trust unchanged. For §4: the base-URL override and
+  its validation.
+- Coverage for D10:
+  - **The flag.** `false` clears that one flag and nothing else; `true` sets
+    it whatever the library's default.
+  - **Trust.** The non-conforming authority is refused with the hint under
+    the default and admitted with `false`: directly, inside a CONNECT
+    tunnel, and selected by `REQUESTS_CA_BUNDLE` and by the `verify=True`
+    default bundle. An authority in neither set is still refused, without
+    the hint. The `https://` proxy endpoint stays outside the setting.
+  - **Startup.** The refusals with their exact lines, in process and
+    through the real entrypoint, and the order of the checks; the spellings;
+    health and the warning line.
+  - **Recognition.** Each code of the family gives its hint, and none comes
+    for other codes, with the flag cleared, or without a failed
+    verification. The text fallback works, and the walk alone finds the
+    verify error in the three exception shapes: direct, tunnelled, and at
+    an `https://` proxy endpoint.
 
 ## 7. Logging
 
@@ -388,6 +498,14 @@ stderr and nothing on stdout, exit code 1:
 `not a regular file`, `cannot be read (<OS error>)` or
 `no certificate could be loaded (<loader's reason>)`. The line never holds
 certificate contents or another variable's value.
+
+With `X509_STRICT=false` (D10), one startup line at warning level, with
+`"message": "x509_strict_disabled"` and `"event": "x509_strict_disabled"` and
+no other fields. It comes after `ca_file_loaded` when both apply, and before
+uvicorn's own startup lines; with `true` there is none. An `X509_STRICT` that
+is neither true nor false ends the process the same way as an unusable
+`CA_FILE`, with `X509_STRICT: expected true or false: <value>`, the value as
+given, in Python's `repr`. It is checked before `CA_FILE` is read.
 
 Uvicorn's access log is disabled (the app's request log supersedes it) and
 uvicorn error logs are routed through the same JSON formatter;
@@ -430,14 +548,18 @@ one-JSON-object-per-line rule.
   has none: save by tag, the archive's configuration digest computed from
   its `manifest.json`, the image removed by Id and proven gone, the archive
   loaded back and its Id compared, the checksum verified. The smoke tests
-  then run on the image loaded back, both with a read-only root filesystem
-  and no tmpfs, since the service writes nothing:
-  - without `CA_FILE`, `/health` with `"extra_ca":false`, and a non-global
-    address rejected locally with 400;
+  then run on the image loaded back, all three with a read-only root
+  filesystem and no tmpfs, since the service writes nothing:
+  - without `CA_FILE`, `/health` with `"extra_ca":false` and
+    `"x509_strict":true`, and a non-global address rejected locally with
+    400;
   - with `CA_FILE` (a CA generated on the runner, mounted read-only),
-    `"extra_ca":true` and exactly one `ca_file_loaded` line.
+    `"extra_ca":true`, `"x509_strict":true` and exactly one
+    `ca_file_loaded` line;
+  - with `X509_STRICT=false`, `"x509_strict":false` and exactly one
+    `x509_strict_disabled` line, at warning level.
 
-  Both use a syntactically valid **dummy** key
+  All three use a syntactically valid **dummy** key
   (`ABUSEIPDB_API_KEY=ci-dummy-key` — deliberately low-entropy so secret
   scanners never flag it) and poll `/health` via the published port with a
   bounded retry (~30 s) before failing. "No key in CI" means no *real*
@@ -488,7 +610,7 @@ one-JSON-object-per-line rule.
 
 Python **3.13**, fully type-hinted; **uv** (`pyproject.toml` + `uv.lock`,
 uv-first workflows); FastAPI + uvicorn; pydantic v2 + pydantic-settings;
-**ruff** (lint + format); **pytest**. httpx (D7) and trustme (§6) are
-dev-only. `CLAUDE.md` exists from day one, opening with a "Hard constraints
+**ruff** (lint + format); **pytest**. httpx (D7), trustme and
+cryptography (§6) are dev-only. `CLAUDE.md` exists from day one, opening with a "Hard constraints
 (never violate)" section that mirrors §1 — the SPEC remains the single source
 of truth.

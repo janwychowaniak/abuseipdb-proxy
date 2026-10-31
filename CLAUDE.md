@@ -10,6 +10,10 @@
   caller authentication, by design.
 - **API key lives in the environment only** (`.env`, never committed;
   `SecretStr` in code; never logged, never echoed in responses).
+- **TLS verification is never switched off**: `CA_FILE` only adds
+  certificate authorities to the default trust, and `X509_STRICT` relaxes
+  RFC 5280 conformance checks, never verification; no setting disables
+  verification (SPEC D9, D10).
 - **`async def` is banned codebase-wide** — plain `def` endpoints plus
   `requests` with an explicit timeout on every upstream call (SPEC D7).
 - **English only** for everything that lands in the repository.
@@ -23,7 +27,7 @@
 
 ## Source of truth
 
-`docs/SPEC.md` (decisions D1–D9) governs all behavior; empirical evidence
+`docs/SPEC.md` (decisions D1–D10) governs all behavior; empirical evidence
 lives in `docs/research/NOTES.md` (findings F1–F11) with raw captures next to
 it. When touching behavior, cite the decision you are implementing.
 
@@ -34,6 +38,11 @@ it. When touching behavior, cite the decision you are implementing.
 - Run locally: `uv run uvicorn --factory abuseipdb_proxy.app:create_app --port 8000`
 - Container must build with the classic builder — no BuildKit-only syntax in
   the Dockerfile (SPEC §8); CI enforces this.
+- The `CA_FILE` and `X509_STRICT` tests run against TLS servers and proxies
+  on loopback, with certificates generated per run (`trustme` and
+  `cryptography`, both dev-only). The gated live tests (`tests/test_live.py`,
+  `ABUSEIPDB_LIVE_TESTS=1`) never run in CI, so a change to anything they
+  call (`create_app`, health, the upstream client) is checked by hand.
 - Release: the procedure is the Release section below (SPEC §8).
 - Secret hygiene: gitleaks hooks are active via `core.hooksPath=.githooks`
   (per-clone setting); the CI gitleaks scan is the non-bypassable layer.
@@ -55,9 +64,15 @@ Every public step (push, tag) needs the maintainer's explicit word.
    CI must be green on it.
 2. **Tag:** an **annotated** `v<version>`, whose message is
    `abuseipdb-proxy <version>`, a blank line, then that entry's notes.
-   - Build the message from the entry; never retype it.
+   - Build the message from the entry; never retype it. The notes are the
+     entry's paragraphs without the digest line, the image Id paragraph and
+     errata; `v0.2.0` follows this rule byte for byte.
    - Show the full text to the maintainer before tagging.
-   - Compare the created tag's message with the text before pushing it.
+   - Create the tag with `git tag -a --cleanup=verbatim -F <file>`.
+   - Compare the created tag's message with the text before pushing it: the
+     message part of `git cat-file tag` must equal the file byte for byte.
+     Do not compare against `git tag --format='%(contents)'`, which prints
+     an extra newline.
 
    `release.yml` refuses a lightweight tag, or a tag that does not match
    `pyproject.toml`, before anything is built.

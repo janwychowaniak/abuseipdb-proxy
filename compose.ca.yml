@@ -11,6 +11,10 @@ services:
   abuseipdb-proxy:
     environment:
       CA_FILE: /etc/abuseipdb-proxy/ca.pem
+      # Only when the authority fails Python's strict X.509 checks. It relaxes them for
+      # every chain the service verifies (README: "An authority that fails Python's
+      # strict checks"; SPEC D10).
+      # X509_STRICT: "false"
     volumes:
       - type: bind
         source: ./ca.pem

@@ -78,12 +78,14 @@ Behavior notes:
 `GET /health` — liveness; no upstream call:
 
 ```json
-{ "status": "ok", "name": "abuseipdb-proxy", "version": "…", "extra_ca": false }
+{ "status": "ok", "name": "abuseipdb-proxy", "version": "…", "extra_ca": false, "x509_strict": true }
 ```
 
 `version` is the running package's version. `extra_ca` turns `true` when the
-service trusts an extra certificate authority (`CA_FILE`, see
-[Deploying behind a corporate proxy](#deploying-behind-a-corporate-proxy)).
+service trusts an extra certificate authority (`CA_FILE`). `x509_strict`
+turns `false` when Python's strict X.509 checks are relaxed (`X509_STRICT`).
+See [Deploying behind a corporate proxy](#deploying-behind-a-corporate-proxy)
+for both.
 
 ## Configuration (environment / `.env`)
 
@@ -94,6 +96,7 @@ service trusts an extra certificate authority (`CA_FILE`, see
 | `MAX_AGE_DAYS` | no | 30 | default report window (days) |
 | `UPSTREAM_TIMEOUT_S` | no | 5 | upstream timeout (seconds) |
 | `CA_FILE` | no | — | PEM file of extra CA certificates, trusted in addition to the default ones; unset or empty: none ([corporate proxy](#deploying-behind-a-corporate-proxy)) |
+| `X509_STRICT` | no | `true` | `false` relaxes Python's strict X.509 checks, for a proxy authority that fails them; unset or empty: `true` ([strict checks](#an-authority-that-fails-pythons-strict-checks)) |
 | `ABUSEIPDB_BASE_URL` | no | `https://api.abuseipdb.com/api/v2` | upstream prefix, for tests and mocks |
 | `HTTPS_PROXY` / `NO_PROXY` | no | — | standard egress-proxy variables, honored as-is |
 
@@ -164,19 +167,47 @@ authority the proxy signs with, lookups fail with `504`
 `upstream-timeout: upstream unreachable (SSLError)`.
 
 The certificates are trusted **in addition to** the default ones, never
-instead of them. *`CA_FILE` adds trust for TLS with AbuseIPDB, directly or
-through a proxy tunnel; the TLS with an `https://` proxy endpoint itself
-keeps the client's default trust (certifi's bundle, or what
-`REQUESTS_CA_BUNDLE` selects).*
+instead of them. *`CA_FILE` adds trust, and `X509_STRICT` relaxes the strict
+checks, for TLS with AbuseIPDB, directly or through a proxy tunnel; the TLS
+with an `https://` proxy endpoint itself keeps the client's default trust
+(certifi's bundle, or what `REQUESTS_CA_BUNDLE` selects) and its strict
+checks.*
 
-Verification is never switched off: the authority, and the certificates the
-proxy issues under it, must pass Python's strict X.509 checks — CA basic
-constraints, a key usage that permits certificate signing, key identifiers,
-and subject alternative names on the issued certificates.
+Verification is never switched off. The authority, and the certificates the
+proxy issues under it, must pass Python's strict X.509 checks: CA basic
+constraints marked critical, a key usage that permits certificate signing,
+key identifiers, and subject alternative names on the issued certificates.
+For an authority that cannot pass them, see
+[An authority that fails Python's strict checks](#an-authority-that-fails-pythons-strict-checks).
 
 `REQUESTS_CA_BUNDLE` still works as a wholesale replacement of the default
 bundle; `CA_FILE` adds to whatever it selects. (`requests` ignores
 `SSL_CERT_FILE`.)
+
+### An authority that fails Python's strict checks
+
+**Symptom.** Every lookup fails with `504`, although `CA_FILE` holds the
+proxy's authority. The response's `detail`, and the `detail` of the log line,
+say:
+
+```text
+upstream-timeout: upstream unreachable (SSLError); TLS: Basic Constraints of CA cert not marked critical, see X509_STRICT
+```
+
+**Cause.** RFC 5280 (§4.2.1.9) requires a CA certificate to mark its Basic
+Constraints critical, and Python 3.13 enforces this by default, so an
+authority issued without the marker is refused even though it is trusted.
+
+**Remedy**, when the authority cannot be reissued: set `X509_STRICT: "false"`
+next to `CA_FILE` in the overlay; `compose.ca.yml` carries the line,
+commented out. `GET /health` then says `"x509_strict": false`, and the log
+holds one `x509_strict_disabled` warning. Verification stays on: the chain
+must still lead to a trusted authority, and the hostname must still match.
+
+**Blast radius.** `false` relaxes the RFC 5280 conformance checks for every
+chain the service verifies, the public AbuseIPDB chain included, and the flag
+gates more than Basic Constraints criticality: key identifiers, key usage and
+names as well.
 
 ## Using a release file on a host without registry access
 
