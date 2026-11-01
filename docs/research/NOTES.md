@@ -1,8 +1,8 @@
 # Research notes — AbuseIPDB APIv2 CHECK
 
 Captured 2026-08-10 with `capture.py` (raw responses in `captures/`, API key
-redacted). These findings feed the D-decisions in the upcoming SPEC; nothing
-here is a decision yet.
+redacted). These findings are the evidence behind the D-decisions of
+`docs/SPEC.md`; the decisions themselves live there.
 
 ## Transport
 
@@ -71,7 +71,8 @@ here is a decision yet.
 10. **429 not captured live** — doing so would burn the full daily quota.
    `captures/error-quota-429.RECONSTRUCTED.json` is hand-built from the
    official docs (`Retry-After` in seconds until midnight UTC) and marked as
-   such; replace with a live capture if we ever hit the limit naturally.
+   such; supersede it with a live capture under a fresh file name if we ever
+   hit the limit naturally (captures are frozen).
 
 11. **Python 3.13 `is_global` boundary, measured** (CPython 3.13.12,
     2026-08-10): rejects RFC1918, loopback, link-local, CGNAT 100.64/10

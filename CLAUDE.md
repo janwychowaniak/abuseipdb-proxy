@@ -20,7 +20,9 @@
 - **Tests are offline**: no network, no key; upstream faked from
   `docs/research/captures/`. The network guard in conftest fails every
   connection; tests marked `loopback` may connect to numeric loopback
-  addresses only (`127.0.0.0/8`, `::1`). Never widen it beyond that.
+  addresses only (`127.0.0.0/8`, `::1`). Never widen it beyond that. Only
+  the gated live tests (`live`, opt-in through `ABUSEIPDB_LIVE_TESTS=1`)
+  bypass the guard.
 - **`docs/research/captures/` are frozen fixtures**: tests assert their
   exact values. Never overwrite an existing capture — a fresh capture gets a
   fresh file name.
@@ -66,7 +68,7 @@ Every public step (push, tag) needs the maintainer's explicit word.
    `abuseipdb-proxy <version>`, a blank line, then that entry's notes.
    - Build the message from the entry; never retype it. The notes are the
      entry's paragraphs without the digest line, the image Id paragraph and
-     errata; `v0.2.0` follows this rule byte for byte.
+     errata; `v0.2.0` and `v0.3.0` follow this rule byte for byte.
    - Show the full text to the maintainer before tagging.
    - Create the tag with `git tag -a --cleanup=verbatim -F <file>`.
    - Compare the created tag's message with the text before pushing it: the
@@ -98,6 +100,7 @@ Every public step (push, tag) needs the maintainer's explicit word.
 re-runs the release and can publish the same version under another digest;
 a wrong line is corrected in `CHANGELOG.md` as an erratum.
 
-The release path runs only on tags. A change to `release.yml` or
-`archive-image.sh` is checked locally as far as it goes, then by reading
-the next release's log.
+The release path runs only on tags. CI runs `archive-image.sh` on every
+push, but with no record to compare against; a change to `release.yml`, or
+to the script's record comparison, is checked locally as far as it goes,
+then by reading the next release's log.

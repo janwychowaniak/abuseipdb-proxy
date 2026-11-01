@@ -423,11 +423,12 @@ quota state, and that is intentional.
 - **Enforced, not assumed** (audit): a guard on every test fails any test
   that attempts a real network call, and test settings never read the
   repository `.env` — a single mock miss must not burn quota with the real
-  key or flake in keyless CI. One exception, and only one: tests marked
-  `loopback` may connect to numeric loopback addresses (`127.0.0.0/8`,
-  `::1`), for TLS servers on loopback. The guard reads the address in every
-  shape `connect()` receives and refuses names and `AF_UNIX` paths; its own
-  tests pin both sides.
+  key or flake in keyless CI. One exception, and only one, among the offline
+  tests: tests marked `loopback` may connect to numeric loopback addresses
+  (`127.0.0.0/8`, `::1`), for TLS servers on loopback. The gated live tests
+  (below) are not offline and bypass the guard. The guard reads the address
+  in every shape `connect()` receives and refuses names and `AF_UNIX` paths;
+  its own tests pin both sides.
 - **TLS on loopback** (D9, D10): the extra-CA and strict-check tests run
   against HTTPS servers and CONNECT proxies on loopback, through the client
   a deployment builds (the one session with its adapter); the upstream
