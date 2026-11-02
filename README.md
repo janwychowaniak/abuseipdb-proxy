@@ -6,6 +6,12 @@ endpoint — built for a single analyst on the same machine. Localhost-only,
 no caller auth, key in the environment. Full behavioral contract:
 [`docs/SPEC.md`](docs/SPEC.md).
 
+Its API is the envelope it shares with its sibling, vt-proxy:
+[`docs/ENVELOPE.md`](docs/ENVELOPE.md) is the family's contract.
+**0.4.0 breaks every caller of 0.3.0:** the lookup is `POST /v1/check` with
+a JSON body, health is `GET /v1/health`, and errors are
+`{"error": {"code", "message", …}}`. See [`CHANGELOG.md`](CHANGELOG.md).
+
 ## Quickstart
 
 Using the published image:
@@ -14,7 +20,8 @@ Using the published image:
 cp .env.example .env          # then put your real APIv2 key in it
 docker run -d --name abuseipdb-proxy --env-file .env \
   -p 127.0.0.1:8000:8000 ghcr.io/janwychowaniak/abuseipdb-proxy:latest
-curl -s 127.0.0.1:8000/check/87.98.154.146 | jq
+curl -s -X POST 127.0.0.1:8000/v1/check -H 'Content-Type: application/json' \
+  -d '{"artifact": "87.98.154.146"}' | jq
 ```
 
 Prebuilt images are published on version tags:
@@ -34,22 +41,44 @@ uv run uvicorn --factory abuseipdb_proxy.app:create_app --host 127.0.0.1 --port 
 
 ## API
 
-`GET /check/{ip}` — single IPv4/IPv6 lookup. Optional query params:
-`threshold` (0–100), `max_age_days` (1–365), `verbose` (attach per-report
-details).
+`POST /v1/check` is a single IPv4/IPv6 lookup. Its JSON body takes:
+
+- `artifact` (required): the address;
+- `threshold` (0–100), optional;
+- `max_age_days` (1–365), optional;
+- `verbose`, optional: attach per-report details;
+- `msg`, optional: a correlation string, echoed and logged, never used.
+
+Every field takes its JSON type, and an unknown field is refused.
+
+```json
+{ "artifact": "87.98.154.146", "threshold": 30, "msg": "case-4711" }
+```
 
 ```json
 {
-    "query": "87.98.154.146",
+    "query": {
+        "artifact": "87.98.154.146",
+        "type": "ip",
+        "threshold": 30,
+        "max_age_days": 30,
+        "verbose": false,
+        "msg": "case-4711"
+    },
     "known": true,
     "verdict": { "score": 30, "thresh_gte": true },
-    "params": { "threshold": 30, "max_age_days": 30, "verbose": false },
     "report": { "…": "raw upstream data, unmodified" }
 }
 ```
 
 Response fields:
 
+- `query` — what was asked:
+  - the artifact as sent, and `type: "ip"`;
+  - the **effective** `threshold`, `max_age_days` and `verbose`. Config
+    defaults fill in whatever you omitted, so a stored response can always
+    explain its own verdict;
+  - `msg`, or `null`.
 - `known` — AbuseIPDB currently knows something actionable about this IP:
   it was reported within the `max_age_days` window, **or** it is
   whitelisted, **or** its score is non-zero. An IP whose only reports are
@@ -58,24 +87,33 @@ Response fields:
   the GUI shows. The score is *window-invariant*: `max_age_days` filters
   `report.totalReports` and the `verbose` report list, never the score.
 - `verdict.thresh_gte` — `score >= threshold`.
-- `params` — the **effective** values used for this evaluation (config
-  defaults fill in whatever you omitted), so a stored response can always
-  explain its own verdict.
 - `report` — the upstream `data` object, unmodified (whitelist flag,
-  ISP/usage-type, `lastReportedAt`, …; plus `reports[]` when `verbose`).
+  ISP/usage-type, `lastReportedAt`, …; plus `reports[]` when `verbose`). It
+  is there with `known: false` too.
 
-Behavior notes:
+Every non-2xx answer has one body. Branch on `error.code`, never on the
+message:
 
-- Non-global addresses (RFC1918, loopback, CGNAT, multicast, …) are rejected
-  locally with `400` — they never reach upstream or burn quota.
-- Error statuses: `400` invalid input, `429` upstream quota (with
-  `Retry-After` when upstream provides it), `502` upstream auth/anomaly,
-  `504` upstream timeout or connection failure, a failed TLS verification
-  included. Bodies are `{"detail": "<reason>"}` with stable prefixes
-  (`upstream-auth:`, `upstream-timeout:`, `upstream-unexpected:`).
-- `404` is a routing status ("no such endpoint"), **never** "IP unknown".
+```json
+{ "error": { "code": "UPSTREAM_QUOTA", "message": "upstream daily rate limit exceeded", "upstream": { "status": 429, "message": "Daily rate limit of 1000 requests exceeded …" } } }
+```
 
-`GET /health` — liveness; no upstream call:
+| `error.code` | Status | When |
+|---|---|---|
+| `VALIDATION_ERROR` | 422 | the body's shape: not JSON, a missing or empty `artifact`, a wrong type, an explicit `null`, a value out of range, an unknown field |
+| `INVALID_ARTIFACT` | 422 | not a single IP address, or a non-global one (RFC1918, loopback, CGNAT, multicast, …); rejected locally, so it never reaches upstream or burns quota |
+| `UPSTREAM_AUTH` | 502 | AbuseIPDB refused the key (401, 403): check `ABUSEIPDB_API_KEY` |
+| `UPSTREAM_QUOTA` | 429 | AbuseIPDB's daily quota; `Retry-After` is passed through when AbuseIPDB sends it |
+| `UPSTREAM_TIMEOUT` | 504 | no answer in time, a connection failure, a failed TLS verification, or AbuseIPDB's own 504 |
+| `UPSTREAM_ERROR` | 502 | any other AbuseIPDB status |
+| `UPSTREAM_SCHEMA` | 502 | a 200 the service cannot read |
+| `NOT_FOUND`, `METHOD_NOT_ALLOWED` | 404, 405 | an unknown path, a wrong method: routing statuses, **never** "IP unknown" |
+| `INTERNAL` | 500 | an unexpected failure |
+
+`upstream` appears only when AbuseIPDB answered with its own error object:
+its HTTP status and its message.
+
+`GET /v1/health` — liveness; no upstream call:
 
 ```json
 { "status": "ok", "name": "abuseipdb-proxy", "version": "…", "extra_ca": false, "x509_strict": true }
@@ -86,6 +124,8 @@ service trusts an extra certificate authority (`CA_FILE`). `x509_strict`
 turns `false` when Python's strict X.509 checks are relaxed (`X509_STRICT`).
 See [Deploying behind a corporate proxy](#deploying-behind-a-corporate-proxy)
 for both.
+
+The OpenAPI documents are served at `/docs`, `/redoc` and `/openapi.json`.
 
 ## Configuration (environment / `.env`)
 
@@ -113,10 +153,16 @@ reads it, so it has no effect under plain `docker run`.
 ## Logs
 
 Structured JSON, one object per line, to stdout only — read with
-`docker logs abuseipdb-proxy`. Every request line carries the effective
-parameters, the computed verdict and upstream latency, plus AbuseIPDB's
-`X-RateLimit-Remaining`; the level switches to `WARNING` once fewer than 50
-daily requests remain (free tier: 1000/day). The log stream is the only
+`docker logs abuseipdb-proxy`.
+
+- **Every lookup answer writes one `check` line:** the artifact, the
+  effective parameters and `msg`, the computed verdict, the upstream status
+  and latency, and AbuseIPDB's `X-RateLimit-Remaining`.
+- **A non-2xx answer** adds its `code`, the error message and `upstream`.
+- **A routing error** writes one `no_route` line.
+
+The level switches to `WARNING` once fewer than 50 daily requests remain
+(free tier: 1000/day). The log stream is the only
 quota-visibility mechanism. Under compose the container log is capped
 (json-file, 10 MB × 3 files); the Quickstart `docker run` path has no cap
 unless you pass `--log-opt`.
@@ -159,12 +205,12 @@ If the proxy intercepts TLS, give the service its certificate authority with
    and the service refuses to start with `not a regular file`, so put the
    file in place before `up`.
 
-`GET /health` then says `"extra_ca": true`, and the log holds one
+`GET /v1/health` then says `"extra_ca": true`, and the log holds one
 `ca_file_loaded` line with the number of certificates loaded. A file that
 cannot be used stops the start with one line on stderr, for example
 `CA_FILE: no such file: /etc/abuseipdb-proxy/ca.pem`. If the file lacks the
 authority the proxy signs with, lookups fail with `504`
-`upstream-timeout: upstream unreachable (SSLError)`.
+`UPSTREAM_TIMEOUT`, with the message `upstream unreachable (SSLError)`.
 
 The certificates are trusted **in addition to** the default ones, never
 instead of them. *`CA_FILE` adds trust, and `X509_STRICT` relaxes the strict
@@ -187,11 +233,11 @@ bundle; `CA_FILE` adds to whatever it selects. (`requests` ignores
 ### An authority that fails Python's strict checks
 
 **Symptom.** Every lookup fails with `504`, although `CA_FILE` holds the
-proxy's authority. The response's `detail`, and the `detail` of the log line,
-say:
+proxy's authority. The response says the following, and the log line's
+`message` the same:
 
-```text
-upstream-timeout: upstream unreachable (SSLError); TLS: Basic Constraints of CA cert not marked critical, see X509_STRICT
+```json
+{ "error": { "code": "UPSTREAM_TIMEOUT", "message": "upstream unreachable (SSLError); TLS: Basic Constraints of CA cert not marked critical, see X509_STRICT" } }
 ```
 
 **Cause.** RFC 5280 (§4.2.1.9) requires a CA certificate to mark its Basic
@@ -200,7 +246,7 @@ authority issued without the marker is refused even though it is trusted.
 
 **Remedy**, when the authority cannot be reissued: set `X509_STRICT: "false"`
 next to `CA_FILE` in the overlay; `compose.ca.yml` carries the line,
-commented out. `GET /health` then says `"x509_strict": false`, and the log
+commented out. `GET /v1/health` then says `"x509_strict": false`, and the log
 holds one `x509_strict_disabled` warning. Verification stays on: the chain
 must still lead to a trusted authority, and the hostname must still match.
 

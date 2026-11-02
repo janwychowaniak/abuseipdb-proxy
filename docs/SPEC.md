@@ -11,7 +11,9 @@ three-lens subagent audit (2026-08-10). Revision 3 adds D9, extra CA trust
 through `CA_FILE`, with the upstream base-URL override it needs for testing
 (0.2.0). Revision 4 adds D10, `X509_STRICT`, an opt-out of Python's strict
 X.509 checks on the upstream TLS context, which the service now hands to the
-client in every configuration (0.3.0).
+client in every configuration (0.3.0). Revision 5 adds D11, one envelope
+for the family of reputation facades: the API takes the shape of the
+sibling project, vt-proxy, written down as `docs/ENVELOPE.md` (0.4.0).
 
 ## 1. Hard constraints (never violate)
 
@@ -20,6 +22,9 @@ client in every configuration (0.3.0).
   `https://api.abuseipdb.com/api/v2` unless `ABUSEIPDB_BASE_URL` overrides it
   for tests and mocks (§4) — and never any mutating AbuseIPDB endpoint
   (REPORT, etc.). Read-only is semantic, not just an HTTP method choice.
+  The service's own lookup is nevertheless `POST /v1/check`, by the
+  family's convention (D11): its read-only semantics rest on this
+  constraint, not on the verb.
 - **Localhost-only.** The service is deployed with its port published on
   `127.0.0.1` only. No authentication of callers, by design: the trust
   boundary is the machine.
@@ -56,13 +61,17 @@ client in every configuration (0.3.0).
   window is `known: false` (F3). A whitelisted IP with zero window reports
   is `known: true` with score 0.
 - **D3 — Local input validation; non-global rejection.** The proxy parses
-  the input with Python's `ipaddress` before any upstream call:
-  1. Unparseable input → 400. (Upstream's 422 still burns daily quota, F8 —
-     and local rejection is faster and deterministic.)
+  the request's `artifact` with Python's `ipaddress` before any upstream
+  call. Each rejection is a content failure, `422 INVALID_ARTIFACT` with a
+  reason (D4); the request's shape is checked before it (§3).
+  1. Unparseable input → rejected, "not a valid IPv4 or IPv6 address"; text
+     containing `/`, a network or a range, first → "not a single IP
+     address". (Upstream's 422 still burns daily quota, F8 — and local
+     rejection is faster and deterministic.)
   2. A parsed IPv6 address with a non-empty `scope_id` (zone-id, e.g.
-     `2606:4700:4700::1111%eth0`) → 400 "zone-id not allowed". Audit
-     finding: a zone-id on a *global* address passes the `is_global` check,
-     goes upstream, 422s and burns quota — it must die locally.
+     `2606:4700:4700::1111%eth0`) → rejected, "zone-id is not allowed".
+     Audit finding: a zone-id on a *global* address passes the `is_global`
+     check, goes upstream, 422s and burns quota — it must die locally.
   3. A v4-mapped IPv6 address (`::ffff:a.b.c.d`) is **unwrapped** to the
      embedded IPv4. Rationale: upstream treats the mapped form as a separate
      identity with a blank record — `::ffff:8.8.8.8` has zero reports while
@@ -79,7 +88,7 @@ client in every configuration (0.3.0).
      `ipaddress` is the implementation, not the definition: the test suite
      enumerates these categories explicitly, so an interpreter upgrade that
      shifts `is_global` surfaces as a test failure, not a silent contract
-     change. Violation → 400 with a reason naming the category. Rationale:
+     change. Violation → rejected with a reason naming the category. Rationale:
      upstream answers such queries as if they were meaningful (192.168.1.1
      "has" 16 reports, F6) — garbage that must not reach an analyst — and
      every avoided call conserves quota.
@@ -89,28 +98,46 @@ client in every configuration (0.3.0).
      capture) the canonical form, and makes log/response correlation
      deterministic across textual variants of one address.
 - **D4 — Error mapping.** "No data" is not an error (F4: upstream has no
-  404 semantics; an unreported IP is a 200). Failures map as:
+  404 semantics; an unreported IP is a 200). Every non-2xx answer is the
+  error body of §3, `{"error": {"code", "message", "upstream"?}}`, with the
+  codes of the family's contract (D11). Callers branch on `error.code`,
+  never on `message`, which is prose. Failures map as:
 
-  | Condition | Our status | Body `detail` (source) |
-  |---|---|---|
-  | input fails D3, or query-param validation fails | 400 | ours: validation reason |
-  | upstream 401 (bad/revoked key) | 502 | ours, stable prefix `upstream-auth:` — "check ABUSEIPDB_API_KEY" |
-  | upstream 429 (daily quota) | 429 | upstream `detail` passed through when parseable; `Retry-After` passed through when present |
-  | upstream timeout / connection error | 504 | ours, stable prefix `upstream-timeout:` |
-  | upstream 422 or any other unexpected status/shape | 502 | ours, stable prefix `upstream-unexpected:` + upstream status |
+  | Condition | Status | `error.code` | `upstream` |
+  |---|---|---|---|
+  | the request's shape (§3) | 422 | `VALIDATION_ERROR` | — |
+  | `artifact` fails D3 | 422 | `INVALID_ARTIFACT` | — |
+  | upstream 401 or 403 (key wrong, revoked or insufficient) | 502 | `UPSTREAM_AUTH` | when parseable |
+  | upstream 429 (daily quota); `Retry-After` passed through when present | 429 | `UPSTREAM_QUOTA` | when parseable |
+  | upstream 504; no answer: timeout, connection error, failed TLS verification | 504 | `UPSTREAM_TIMEOUT` | on the upstream's 504, when parseable |
+  | any other upstream status but 200 (5xx, 422, other 4xx) | 502 | `UPSTREAM_ERROR` | when parseable |
+  | an upstream 200 the service cannot read | 502 | `UPSTREAM_SCHEMA` | — |
+  | unknown path | 404 | `NOT_FOUND` | — |
+  | known path, wrong method; `Allow` kept | 405 | `METHOD_NOT_ALLOWED` | — |
+  | unexpected internal failure | 500 | `INTERNAL` | — |
 
-  Per-row body source is normative (audit finding: an earlier blanket
-  "upstream detail is passed through" sentence contradicted the fixed-string
-  rows). The stable `detail` prefixes are part of the contract so caller
-  scripts can branch without parsing prose — in particular distinguishing
-  permanent `upstream-auth:` (do not retry) from transient
-  `upstream-unexpected:`/`upstream-timeout:`. The 429 mapping keys on the
-  upstream **status code alone** and must tolerate a non-JSON body (CDN-era
-  429s can be HTML — fall back to a generic detail) and an absent
-  `Retry-After` (omit the header, never fabricate one). The API key is
-  never echoed. A 422 reaching us post-validation means our validator and
-  upstream disagree — with D3.2 in place that is a genuine bug surface,
-  hence 502, not a pass-through.
+  `upstream` is `{"status": <the upstream's HTTP status>, "message": <its
+  errors[0].detail>}`: built, never passed through, and present only when
+  the body is a JSON object whose `errors` is a non-empty list whose first
+  element is an object with a string `detail` (F7). An HTML page, an empty
+  body or any other shape yields none, never a partial one. It has no
+  `code`: this upstream's error object carries none. On a 504 its presence
+  tells that the upstream noticed the timeout.
+
+  The status picks the code; the body only feeds `upstream`. An upstream
+  401 or 403 is the service's misconfiguration, not the caller's: hence
+  502 `UPSTREAM_AUTH`, a code a caller does not retry on, never a 401 that
+  would tell the caller to authenticate (the sibling's `[D8]`). The 429
+  mapping keys on the upstream **status code alone** and must tolerate a
+  non-JSON body (CDN-era 429s can be HTML) and an absent `Retry-After`
+  (omit the header, never fabricate one). The API key is never echoed. A
+  422 reaching us post-validation means our validator and upstream
+  disagree — with D3.2 in place that is a genuine bug surface, hence 502,
+  not a pass-through. A 200 is read when its `data` is an object, with
+  `abuseConfidenceScore` an integer that is not a boolean, and
+  `totalReports`, when present, one too (absent counts as 0): the fields D2
+  compares. Anything else is `UPSTREAM_SCHEMA`; 0.3.0 answered a boolean
+  score as a score, and a malformed `totalReports` with a plain-text 500.
 - **D5 — Surface: single lookup endpoint.** CHECK only, single IP (v4/v6).
   No REPORTS, BLACKLIST or CHECK-BLOCK in v1. `verbose` is exposed as an
   optional passthrough flag: when set, upstream attaches per-report details
@@ -131,7 +158,7 @@ client in every configuration (0.3.0).
   forever); **all endpoints are plain `def`** — `async def` is banned
   codebase-wide (blocking `requests` in sync endpoints runs in Starlette's
   threadpool; in `async def` it would freeze the event loop). All sync
-  endpoints share that default threadpool (~40 threads), `/health`
+  endpoints share that default threadpool (~40 threads), `/v1/health`
   included — saturation by a burst of slow lookups delays liveness too;
   accepted for the single-analyst deployment. Accepted side effect: httpx
   appears as a dev-only dependency via FastAPI's TestClient; service code
@@ -183,7 +210,7 @@ client in every configuration (0.3.0).
      reported first, with its own error.
 
   A failed verification stays on D4's transport-error path: 504
-  `upstream-timeout: upstream unreachable (SSLError)`; while the strict
+  `UPSTREAM_TIMEOUT`, `upstream unreachable (SSLError)`; while the strict
   checks are on, a failure that only they cause gets D10's hint. Several
   files, a CA directory and reloading without a restart are out of scope.
 - **D10 — `X509_STRICT` relaxes RFC 5280 conformance, never verification.**
@@ -235,8 +262,9 @@ client in every configuration (0.3.0).
      - **When.** While the flag is set, a transport error whose exception
        graph holds a verify error with one of those 15 codes gets
        `; TLS: <OpenSSL's text for the code>, see X509_STRICT` appended to
-       its `detail`. Status 504 and the prefix `upstream-timeout:` stay
-       (D4), and the `check` log line carries the same text.
+       its `message`. Status 504 and the code `UPSTREAM_TIMEOUT` stay (D4),
+       and the `check` line's `message` carries the same text. A timeout
+       holds no verify error, so it never gets the hint.
      - **The graph.** It is the caught exception and every exception
        reachable through `__cause__` and `__context__`: both links of each
        exception, each exception once, cause first. The first verify error
@@ -252,93 +280,193 @@ client in every configuration (0.3.0).
        flag is set, although the setting cannot reach that hop.
 
   Out of scope: inspecting `CA_FILE`'s extensions at startup, any other
-  verify flag, per-host exceptions, and a distinct status or `detail` prefix
-  for TLS verification failures.
+  verify flag, per-host exceptions, and a distinct status or code for TLS
+  verification failures.
+- **D11 — One envelope for the family.** The service answers in the shape
+  shared by every reputation facade of its family, the shape of its
+  sibling, vt-proxy, written down as [`docs/ENVELOPE.md`](ENVELOPE.md)
+  (contract version 1), so that a consumer is written once and a new
+  facade is built to one document.
+  1. **One lookup, by `POST`.** `POST /v1/check` with a JSON body, although
+     it reads only: read-only semantics are guaranteed by §1, not by the
+     verb. A body carries the artifact and free text (`msg`) safely, and one
+     calling convention serves every facade. Every path carries `/v1`; a
+     trailing slash is an unknown path, never a redirect.
+  2. **The request.** `artifact`, this facade's parameters (`threshold`,
+     `max_age_days`, `verbose`) and `msg`, in strict JSON types: another
+     type is a shape failure, never coerced, since a coercion would turn a
+     caller's slip into a silently different query (pydantic's lax mode
+     reads `true` as the integer 1). Unknown fields and an explicit `null`
+     for a parameter are refused; `msg: null` means absent.
+  3. **The envelope.** Exactly four keys, always present: `query`, `known`,
+     `verdict`, `report`. `query` echoes the artifact as sent, `type: "ip"`
+     from the family's vocabulary, the effective parameters and `msg`; it
+     absorbs 0.3.0's `params`, for the reason `params` existed: a stored
+     response explains its own verdict. At `known: false`, `verdict` and
+     `report` stay present, since the upstream always answers with a
+     record; the contract allows this shape beside the sibling's `null`s.
+  4. **The error body.** Every non-2xx answer is the error body with the
+     contract's codes (D4), unknown paths and wrong methods included, so no
+     framework default body reaches a caller.
+  5. **Health and the documents.** Health is `GET /v1/health`. The OpenAPI
+     documents are enabled at FastAPI's defaults; they add no outbound
+     call, their pages loading their assets in the reader's browser.
+  6. **A clean break.** 0.4.0 removes `GET /check/{ip}`, `GET /health`, the
+     `params` key and the `detail` bodies, with no aliases and no
+     deprecation period: every consumer converges by configuration.
 
 ## 3. HTTP API
 
-### `GET /check/{ip}`
+The API is the family's envelope (D11), whose generic contract is
+[`docs/ENVELOPE.md`](ENVELOPE.md); this section is its instance here. Two
+endpoints: `POST /v1/check` and `GET /v1/health`.
 
-Path parameter: the IP address as text (IPv4 or IPv6; IPv6 colons are legal
-in a path segment). `query` in the envelope echoes the **decoded** path
-segment (percent-decoding applied by the server; e.g. a sent `%25` arrives
-as `%`).
+### `POST /v1/check`
 
-Query parameters (all optional):
-
-| Param | Type | Default | Constraint |
-|---|---|---|---|
-| `threshold` | int | `SCORE_THRESHOLD` config | 0–100 |
-| `max_age_days` | int | `MAX_AGE_DAYS` config (30) | 1–365 |
-| `verbose` | bool | false | — |
-
-Success — `200`, envelope:
+Request: a JSON object, `Content-Type: application/json`, UTF-8.
 
 ```json
 {
-    "query": "<the IP as asked (decoded path segment)>",
+    "artifact": "87.98.154.146",
+    "threshold": 30,
+    "max_age_days": 30,
+    "verbose": false,
+    "msg": "case-4711"
+}
+```
+
+| Field | JSON type | Required | Default | Constraint |
+|---|---|---|---|---|
+| `artifact` | string | yes | — | at least one character; content per D3 |
+| `threshold` | integer | no | `SCORE_THRESHOLD` config (30) | 0–100 |
+| `max_age_days` | integer | no | `MAX_AGE_DAYS` config (30) | 1–365 |
+| `verbose` | boolean | no | `false` | presence-keyed upstream (D5) |
+| `msg` | string or `null` | no | `null` | none; echoed and logged (§7), never used |
+
+- **The shape comes first.** These are `422 VALIDATION_ERROR` (D4), and
+  the upstream is not called:
+  - a body that is not JSON, not an object, or empty;
+  - a missing, empty or non-string `artifact`;
+  - a value of another JSON type. The types are strict: `true`, `5.0` and
+    `"5"` are no integer, and `"true"` and `1` no boolean;
+  - an explicit `null` for `artifact`, `threshold`, `max_age_days` or
+    `verbose`;
+  - a value out of range;
+  - an unknown field.
+
+  `msg: null` means absent; an empty `msg` is a value.
+- **The content is D3's.** Its rejections are `422 INVALID_ARTIFACT` with
+  D3's reason, and the upstream is not called.
+- **Query-string parameters are ignored.** An omitted parameter takes its
+  default, and the request schema of the OpenAPI document shows the
+  configured defaults.
+
+Success — `200`, the envelope:
+
+```json
+{
+    "query": {
+        "artifact": "87.98.154.146",
+        "type": "ip",
+        "threshold": 30,
+        "max_age_days": 30,
+        "verbose": false,
+        "msg": "case-4711"
+    },
     "known": true,
     "verdict": {
         "score": 30,
         "thresh_gte": true
     },
-    "params": {
-        "threshold": 30,
-        "max_age_days": 30,
-        "verbose": false
-    },
     "report": { "...": "upstream `data` object, unmodified" }
 }
 ```
 
-- `query` echoes the caller's input (even when D3 unwrapped a v4-mapped
-  address — the canonical form is visible in `report.ipAddress`, guaranteed
-  by D3.5).
-- `known` per D2; `verdict.score` per D1; `verdict.thresh_gte` per D6.
-- `params` carries the **effective** values used for this evaluation
-  (audit finding: without it, config-default changes silently reinterpret
-  verdicts and a stored response cannot explain itself).
+- Exactly these four keys, always present.
+- `query` has exactly these six keys:
+  - `artifact` echoes the caller's string as sent, even when D3 unwrapped a
+    v4-mapped address: the canonical form is visible in `report.ipAddress`,
+    guaranteed by D3.5;
+  - `type` is always `"ip"`;
+  - the three **effective** values follow. Audit finding: without them,
+    config-default changes silently reinterpret verdicts, and a stored
+    response cannot explain itself;
+  - `msg` is echoed as sent, or `null`.
+- `known` per D2; `verdict.score` per D1; `verdict.thresh_gte` per D6. At
+  `known: false`, `verdict` and `report` stay present (D11): the upstream
+  always answers with a record.
 - `report` is upstream's `data` object passed through unmodified (fields:
   NOTES §Transport; includes `reports[]` when `verbose`).
 
-Errors — status per D4; body is always a single human-readable string:
+### Errors
+
+Every non-2xx answer has one body:
 
 ```json
-{ "detail": "<reason>" }
+{ "error": { "code": "UPSTREAM_QUOTA", "message": "upstream daily rate limit exceeded", "upstream": { "status": 429, "message": "Daily rate limit of 1000 requests exceeded for this endpoint. See headers for additional details." } } }
 ```
 
-FastAPI's native validation error (422 with a list-shaped `detail`) is
-**not** part of this contract: a custom `RequestValidationError` handler
-converts query-param validation failures to the same 400-with-string shape
-as D3 rejections.
+The codes, their statuses and `upstream` are D4's. The messages are this
+service's prose, which callers never parse:
 
-Routing-level statuses are explicitly **not** reputation semantics: 404
-means "no such endpoint", never "IP unknown" (this service has no VT-style
-404, F4), and 405 means wrong method. Because a CIDR typo
-(`/check/8.8.8.0/24` — also reachable via `%2F`, which ASGI decodes before
-routing) would otherwise surface as a bare 404, a catch-all route
-`/check/{rest:path}` returns 400 "not a single IP address" for any
-multi-segment path.
+| `error.code` | Status | `message` |
+|---|---|---|
+| `VALIDATION_ERROR` | 422 | `<field>: <reason>` per failure, joined by `; `. The body as a whole is `body`, and an unparseable one `body: JSON decode error at position <n>` |
+| `INVALID_ARTIFACT` | 422 | D3's reason: `not a valid IPv4 or IPv6 address`, `not a single IP address`, `zone-id is not allowed`, `multicast address — no public reputation exists`, `<category> address — no public reputation exists` |
+| `UPSTREAM_AUTH` | 502 | `upstream refused this service's API key — check ABUSEIPDB_API_KEY` |
+| `UPSTREAM_QUOTA` | 429 | `upstream daily rate limit exceeded` |
+| `UPSTREAM_TIMEOUT` | 504 | `upstream reported a timeout (HTTP 504)`; `upstream unreachable (<exception class>)`, with D10's hint while the strict checks are on; `no response within the configured timeout` |
+| `UPSTREAM_ERROR` | 502 | `upstream returned HTTP <status>` |
+| `UPSTREAM_SCHEMA` | 502 | `upstream response shape not recognized` |
+| `NOT_FOUND` | 404 | `unknown path` |
+| `METHOD_NOT_ALLOWED` | 405 | `method not allowed for this path` |
+| `INTERNAL` | 500 | `internal error` |
 
-### `GET /health`
+The value of `msg` never appears in an error body. FastAPI's native
+validation error (422 with a list-shaped `detail`) never reaches a caller:
+a handler turns it into `VALIDATION_ERROR`.
 
-`200`, with the service's name and version from the installed package
-metadata, whether `CA_FILE` is in use (D9), and whether the strict X.509
-checks are on (D10):
+### Routing and the OpenAPI documents
+
+- **Routing errors are enveloped.** 404 means "no such endpoint", never
+  "IP unknown" (this service has no VT-style 404, F4). 405 means wrong
+  method and keeps the `Allow` header Starlette computes, which RFC 9110
+  requires. `GET /check/{ip}` and `GET /health`, the paths of 0.3.0, are
+  unknown paths.
+- **No trailing-slash redirects.** `redirect_slashes` is off, so
+  `POST /v1/check/` is a 404.
+- **The OpenAPI documents** are served at FastAPI's defaults, `/docs`,
+  `/redoc`, `/openapi.json` and `/docs/oauth2-redirect`, with the package's
+  version in `info.version`.
+  - Enabling them adds no outbound call: the service serves two HTML pages
+    and the JSON document, and their assets load in the reader's browser
+    from public CDNs.
+  - The document's error entries are FastAPI's own, and describe no answer
+    of this service: its 422 is the list-shaped `HTTPValidationError`, as
+    in the sibling's. This section and D4 are the contract.
+
+### `GET /v1/health`
+
+`200`, with:
+
+- the service's name and version, from the installed package metadata;
+- whether `CA_FILE` is in use (D9);
+- whether the strict X.509 checks are on (D10).
 
 ```json
 { "status": "ok", "name": "abuseipdb-proxy", "version": "…", "extra_ca": false, "x509_strict": true }
 ```
 
-`extra_ca` is always present: `true` when `CA_FILE` is loaded, `false`
-otherwise — no path, fingerprint or subject. `x509_strict` is always
-present, after `extra_ca`. It says whether the context that verifies TLS with
-AbuseIPDB carries `ssl.VERIFY_X509_STRICT`, and it is read from that context
-itself: `false` only when `X509_STRICT=false` has cleared the flag. No
-upstream call, no key use —
-safe for container smoke-tests and liveness probes. Note `/health` proves
-the process is up and configured (settings load eagerly at startup, §4) — it
-does not probe upstream reachability.
+- **`extra_ca`** is always present: `true` when `CA_FILE` is loaded, `false`
+  otherwise. It shows no path, fingerprint or subject.
+- **`x509_strict`** is always present, after `extra_ca`. It says whether the
+  context that verifies TLS with AbuseIPDB carries `ssl.VERIFY_X509_STRICT`,
+  and it is read from that context itself: `false` only when
+  `X509_STRICT=false` has cleared the flag.
+- **No upstream call, no key use:** safe for container smoke-tests and
+  liveness probes. `/v1/health` proves the process is up and configured
+  (settings load eagerly at startup, §4); it does not probe upstream
+  reachability.
 
 ## 4. Configuration
 
@@ -360,7 +488,7 @@ Loaded by pydantic-settings from the environment / `.env` (12-Factor):
   template-copy accident), or any out-of-range value all abort startup —
   config values carry the same constraints as their per-request
   counterparts. Rationale (audit): lazily-loaded settings would let a
-  fatally misconfigured container pass the `/health` smoke test.
+  fatally misconfigured container pass the `/v1/health` smoke test.
 - **`ABUSEIPDB_API_KEY` is typed `SecretStr`**; the raw value is unwrapped
   only at the point the upstream `Key` header is built. This keeps the key
   out of settings `repr()`s and pydantic `ValidationError` echoes.
@@ -412,8 +540,8 @@ Free-tier quota 1000 checks/day, tracked via `X-RateLimit-*` headers, reset
 at midnight UTC; **invalid queries also burn quota** (F8) — hence D3's
 local validation. The `X-RateLimit-Remaining` value is logged (§7) but
 quota state is not exposed to callers in v1 — except the deliberate D4
-exception: the 429 pass-through (upstream detail + `Retry-After`) *is*
-quota state, and that is intentional.
+exception: a 429's `upstream` (the upstream's own message) and
+`Retry-After` *are* quota state, and that is intentional.
 
 ## 6. Testing
 
@@ -450,9 +578,9 @@ quota state, and that is intentional.
   score-only (D2), zone-id rejection, v4-mapped unwrap and each normative
   non-global category (D3 — this doubles as the interpreter-drift canary),
   every error-mapping row **including the degraded 429** (non-JSON body, no
-  `Retry-After`) and the 400-with-string shape for query-param failures
-  (D4), presence-keyed verbose (D5), threshold boundary `score ==
-  threshold` and `threshold=0` (D6), and the catch-all `/check/a/b` → 400.
+  `Retry-After`), `upstream` present and absent, and the 200 contract (D4),
+  presence-keyed verbose (D5), and the threshold boundary `score ==
+  threshold` and `threshold=0` (D6).
   For D9: an authority from the file trusted, one in neither set refused;
   the union on both paths (`verify=True` with the default bundle replaced,
   and `REQUESTS_CA_BUNDLE`); the tunnel, with and without the file; every
@@ -477,18 +605,66 @@ quota state, and that is intentional.
     verification. The text fallback works, and the walk alone finds the
     verify error in the three exception shapes: direct, tunnelled, and at
     an `https://` proxy endpoint.
+- Coverage for D11:
+  - **The request.** Every shape failure of §3 as `VALIDATION_ERROR`, the
+    strict types and the explicit `null` included, and D3's rejections as
+    `INVALID_ARTIFACT`, none reaching upstream; the query string ignored.
+  - **The envelope.** Its four keys and `query`'s six, the effective values
+    from the settings and from the body, `msg` echoed or `null`.
+  - **Routing.** The paths of 0.3.0 and trailing slashes as `NOT_FOUND`,
+    the 405 with `Allow`, and the OpenAPI documents with the package's
+    version and the configured defaults.
+  - **Logging.** The `check` line for every kind of answer, the `no_route`
+    line, and the key in no line.
+  - **The deployment path.** The rest of the suite fakes the session; a
+    few lookups go through the real session and its adapter against a TLS
+    upstream on loopback: the envelope, a 429 with `upstream` and
+    `Retry-After`, and an HTML error without `upstream`.
 
 ## 7. Logging
 
 Structured JSON to stdout/stderr only — no files, no volumes; rotation is
-Docker's job. Each request logs: ISO-8601 UTC timestamp, queried IP
-(normalized = `str()` of the parsed, unwrapped address, D3.5), effective
-parameters (as in `params`), upstream status and latency, our status, the
-computed outcome (`score`, `known`, `thresh_gte`) — so a verdict can be
-explained from logs a week later even though upstream data drifts — and
-`X-RateLimit-Remaining` when present, at WARNING level once it drops below
-50 (the log stream is the sole quota-visibility mechanism in v1, §9). Never
-the API key.
+Docker's job.
+
+- **Base keys:** `ts` (ISO-8601 UTC), `level`, `logger` and `message`, the
+  line's text.
+- **App lines** add their fields after these. The fields travel under one
+  `extra` key, `fields`, which the formatter flattens, so a line can carry a
+  name a `LogRecord` reserves, such as `msg`.
+
+**The `check` line.** One per answer of `POST /v1/check`, whatever its
+status, so a verdict can be explained from logs a week later even though
+upstream data drifts:
+
+| Key | When | Value |
+|---|---|---|
+| `message` | always | the error message on a non-2xx answer; `check` on a 2xx |
+| `event` | always | `check` |
+| `our_status` | always | the status answered |
+| `code` | not 2xx | `error.code` |
+| `artifact` | always | as sent, when the body parsed as an object holding it; `null` otherwise |
+| `ip` | D3 accepted the artifact | normalized: `str()` of the parsed, unwrapped address (D3.5) |
+| `threshold`, `max_age_days`, `verbose` | the body validated | the effective values |
+| `msg` | sent, and not `null` | as sent |
+| `upstream_status`, `upstream_ms` | the upstream was called | its status and the latency; `upstream_status` absent when no response came |
+| `score`, `known`, `thresh_gte` | 200 | the computed outcome |
+| `ratelimit_remaining` | the upstream sent `X-RateLimit-Remaining` | its value |
+| `upstream` | the error body has it | the same object |
+
+- **Level:** INFO, and WARNING once `ratelimit_remaining` drops below 50.
+  The log stream is the sole quota-visibility mechanism in v1 (§9).
+- **An unexpected failure** inside the lookup still writes its line, with
+  `INTERNAL`.
+- **Never** the API key, never `report`.
+
+**The `no_route` line.** One per enveloped routing error, at INFO:
+
+- `message`: the error message;
+- `event`: `no_route`;
+- `our_status` and `code`;
+- `method`, and `path` without the query string.
+
+A caller still on 0.3.0's paths shows here.
 
 With `CA_FILE` (D9), one startup line states the number of certificates
 loaded — `"message": "ca_file_loaded"`, with `path` and `certificates` —
@@ -522,7 +698,7 @@ one-JSON-object-per-line rule.
   `DOCKER_BUILDKIT=0 docker build` gate (or, if the runner's Docker drops
   the legacy builder, a lint step failing on the banned syntax). The
   runtime stage drops to a dedicated non-root user (`app`, uid 10001) —
-  defense in depth. A `HEALTHCHECK` probes `GET /health` (§3) every 30 s;
+  defense in depth. A `HEALTHCHECK` probes `GET /v1/health` (§3) every 30 s;
   without an orchestrator the state is informational (`docker ps`) — nothing
   auto-restarts on `unhealthy`.
 - **`.dockerignore` is mandatory and whitelist-style** (`*` then explicit
@@ -551,9 +727,10 @@ one-JSON-object-per-line rule.
   loaded back and its Id compared, the checksum verified. The smoke tests
   then run on the image loaded back, all three with a read-only root
   filesystem and no tmpfs, since the service writes nothing:
-  - without `CA_FILE`, `/health` with `"extra_ca":false` and
-    `"x509_strict":true`, and a non-global address rejected locally with
-    400;
+  - without `CA_FILE`, `/v1/health` with `"extra_ca":false` and
+    `"x509_strict":true`, and a non-global address rejected locally:
+    `POST /v1/check` with `10.0.0.1`, answered 422 with
+    `"code":"INVALID_ARTIFACT"`;
   - with `CA_FILE` (a CA generated on the runner, mounted read-only),
     `"extra_ca":true`, `"x509_strict":true` and exactly one
     `ca_file_loaded` line;
@@ -562,7 +739,7 @@ one-JSON-object-per-line rule.
 
   All three use a syntactically valid **dummy** key
   (`ABUSEIPDB_API_KEY=ci-dummy-key` — deliberately low-entropy so secret
-  scanners never flag it) and poll `/health` via the published port with a
+  scanners never flag it) and poll `/v1/health` via the published port with a
   bounded retry (~30 s) before failing. "No key in CI" means no *real*
   secret — without the dummy, fail-fast startup (§4) would make the smoke
   tests impossible (audit blocker, found independently by two auditors).
@@ -603,7 +780,8 @@ one-JSON-object-per-line rule.
 - Batch lookups, subnet/ASN/domain queries, REPORTS/BLACKLIST/CHECK-BLOCK.
 - Caching of upstream responses (single analyst, 1000/day quota is ample;
   a cache would add staleness semantics for no measured need).
-- Exposing quota state to callers beyond the D4 429 pass-through; caller
+- Exposing quota state to callers beyond D4's 429 (`upstream` and
+  `Retry-After`); caller
   authentication; TLS (localhost trust boundary).
 - Unwrapping non-mapped v4-embedded IPv6 schemes (D3.3 limitation).
 

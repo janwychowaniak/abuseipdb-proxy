@@ -5,7 +5,9 @@
 - **Read-only upstream**: the service calls only the CHECK endpoint,
   `GET <base>/check`, at the configured base URL (default
   `https://api.abuseipdb.com/api/v2`; `ABUSEIPDB_BASE_URL` overrides it for
-  tests and mocks) — never REPORT or any other mutating endpoint.
+  tests and mocks) — never REPORT or any other mutating endpoint. The
+  service's own lookup is `POST /v1/check` by the family's convention (SPEC
+  D11): read-only is semantic, not the verb.
 - **Localhost-only**: the port is published on `127.0.0.1` exclusively; no
   caller authentication, by design.
 - **API key lives in the environment only** (`.env`, never committed;
@@ -29,9 +31,14 @@
 
 ## Source of truth
 
-`docs/SPEC.md` (decisions D1–D10) governs all behavior; empirical evidence
+`docs/SPEC.md` (decisions D1–D11) governs all behavior; empirical evidence
 lives in `docs/research/NOTES.md` (findings F1–F11) with raw captures next to
 it. When touching behavior, cite the decision you are implementing.
+
+`docs/ENVELOPE.md` is the family's envelope contract, which D11 implements.
+It is copied verbatim into vt-proxy, so a change to it is a change for the
+family: it bumps the contract version, never fits this service alone, and
+needs the maintainer's word.
 
 ## Workflows
 
