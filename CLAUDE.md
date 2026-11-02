@@ -36,9 +36,9 @@ lives in `docs/research/NOTES.md` (findings F1–F11) with raw captures next to
 it. When touching behavior, cite the decision you are implementing.
 
 `docs/ENVELOPE.md` is the family's envelope contract, which D11 implements.
-It is copied verbatim into vt-proxy, so a change to it is a change for the
-family: it bumps the contract version, never fits this service alone, and
-needs the maintainer's word.
+The owner copies it verbatim into vt-proxy, so a change to it is a change
+for the family: it bumps the contract version, never fits this service
+alone, and needs the maintainer's word.
 
 ## Workflows
 
@@ -59,6 +59,9 @@ needs the maintainer's word.
   (`disabled_inactivity`), and a disabled workflow scans no pushes either:
   after a pause, check `gh workflow list --all` before the first push.
   Re-enabling it (`gh workflow enable gitleaks`) needs the maintainer's word.
+- CI runs by commit: `gh run list --commit` matches the full SHA only. A
+  short one lists no runs, which reads like CI that has not started; pass
+  `$(git rev-parse <sha>)`.
 
 ## Release
 
@@ -75,7 +78,7 @@ Every public step (push, tag) needs the maintainer's explicit word.
    `abuseipdb-proxy <version>`, a blank line, then that entry's notes.
    - Build the message from the entry; never retype it. The notes are the
      entry's paragraphs without the digest line, the image Id paragraph and
-     errata; `v0.2.0` and `v0.3.0` follow this rule byte for byte.
+     errata; `v0.2.0`, `v0.3.0` and `v0.4.0` follow this rule byte for byte.
    - Show the full text to the maintainer before tagging.
    - Create the tag with `git tag -a --cleanup=verbatim -F <file>`.
    - Compare the created tag's message with the text before pushing it: the
