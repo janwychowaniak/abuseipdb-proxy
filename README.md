@@ -25,7 +25,7 @@ curl -s -X POST 127.0.0.1:8000/v1/check -H 'Content-Type: application/json' \
 ```
 
 Prebuilt images are published on version tags:
-`docker pull ghcr.io/janwychowaniak/abuseipdb-proxy:0.3.0` (`latest` tracks
+`docker pull ghcr.io/janwychowaniak/abuseipdb-proxy:0.4.0` (`latest` tracks
 the newest release). The compose file uses that same `latest` name:
 `docker compose pull` fetches the published image, while
 `docker compose up -d --build` builds it from your checkout. A host without

@@ -15,6 +15,50 @@ The image Id is what a host compares after `docker load` of a release file.
 On Docker's default `overlay2` image store, it is the digest of the image's
 configuration, which the archive carries byte for byte (see the README).
 
+## 0.4.0 — (pending: the date of the tag)
+
+`ghcr.io/janwychowaniak/abuseipdb-proxy@sha256:` (pending: from the release
+workflow's step summary)
+
+Image Id (configuration digest) `sha256:` (pending), after a pull and after
+`docker load` of the release file alike. Python (pending).
+
+One envelope for the family: the API takes the shape of its sibling,
+vt-proxy, and the shape is written down as docs/ENVELOPE.md. This release
+breaks every caller of 0.3.0.
+
+- The lookup is POST /v1/check with a JSON body: artifact (required),
+  threshold, max_age_days, verbose and msg (optional), in their JSON types;
+  unknown fields are refused. GET /check/{ip} and GET /health are gone,
+  with no aliases.
+- query is an object: artifact as sent, type "ip", the effective
+  threshold, max_age_days and verbose, and msg; the params key is folded
+  into it.
+- Every non-2xx answer is {"error": {"code", "message", "upstream"}}, with
+  upstream only when the upstream's error body parses. The codes:
+  VALIDATION_ERROR and INVALID_ARTIFACT (422, where 0.3.0 answered 400),
+  UPSTREAM_AUTH, UPSTREAM_QUOTA, UPSTREAM_TIMEOUT, UPSTREAM_ERROR,
+  UPSTREAM_SCHEMA, NOT_FOUND, METHOD_NOT_ALLOWED and INTERNAL. The detail
+  prefixes are gone. An upstream 403 is now UPSTREAM_AUTH, and an upstream
+  504 UPSTREAM_TIMEOUT.
+- A failed TLS verification still answers 504, now UPSTREAM_TIMEOUT; a
+  failure only the strict checks cause still ends its message with the
+  pointer to X509_STRICT.
+- A 200 whose score is not an integer, or whose totalReports is not one, is
+  now 502 UPSTREAM_SCHEMA; 0.3.0 answered a boolean score as a score and a
+  malformed totalReports with a plain-text 500.
+- Health is GET /v1/health, with the body of 0.3.0; the image's
+  HEALTHCHECK probes it.
+- The OpenAPI documents are enabled: /docs, /redoc, /openapi.json.
+- docs/ENVELOPE.md is the family's contract, version 1.
+- The check log line follows the new names: artifact, threshold,
+  max_age_days, verbose and msg, with code and the error message on
+  non-2xx answers; routing errors log a no_route line.
+
+Unchanged: the upstream contract (CHECK only, no retries), CA_FILE,
+X509_STRICT, the proxy and configuration variables, and the image:
+non-root, on Debian 12, classic-builder-compatible.
+
 ## 0.3.0 — 2026-10-31
 
 `ghcr.io/janwychowaniak/abuseipdb-proxy@sha256:fd4b2fb0731b793f9fc2e6c60b268271100beb0504be7749c6ec2eb4d330cca8`
