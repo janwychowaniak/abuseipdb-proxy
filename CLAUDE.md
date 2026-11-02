@@ -36,9 +36,9 @@ lives in `docs/research/NOTES.md` (findings F1–F11) with raw captures next to
 it. When touching behavior, cite the decision you are implementing.
 
 `docs/ENVELOPE.md` is the family's envelope contract, which D11 implements.
-The owner copies it verbatim into vt-proxy, so a change to it is a change
-for the family: it bumps the contract version, never fits this service
-alone, and needs the maintainer's word.
+It is kept identical to vt-proxy's copy, so a change to it is a change for
+the family: it bumps the contract version, never fits this service alone,
+and needs the maintainer's word.
 
 ## Workflows
 

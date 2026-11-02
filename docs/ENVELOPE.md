@@ -209,10 +209,6 @@ trust fields.
 The differences this contract allows: a facade's own parameters and verdict
 fields, the shape of `known: false` (§4), and `upstream.code`.
 
-**Known deviation.** vt-proxy 0.3.0 coerces integers, against §3's rule on
-JSON types: `"5"`, `5.0` and `true` pass as an integer, `true` as 1. A later
-release of vt-proxy closes it; until then a consumer does not rely on it.
-
 ## 10. Checklist for a new facade
 
 1. Name the lookup after what it does, under `/v1`; `POST` with a JSON body
