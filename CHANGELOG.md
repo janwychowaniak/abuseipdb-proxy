@@ -15,13 +15,14 @@ The image Id is what a host compares after `docker load` of a release file.
 On Docker's default `overlay2` image store, it is the digest of the image's
 configuration, which the archive carries byte for byte (see the README).
 
-## 0.4.0 — (pending: the date of the tag)
+## 0.4.0 — 2026-11-02
 
-`ghcr.io/janwychowaniak/abuseipdb-proxy@sha256:` (pending: from the release
-workflow's step summary)
+`ghcr.io/janwychowaniak/abuseipdb-proxy@sha256:535e0a349ab0be43bcdf35bd470601c25daada0e87bd9439c45c1a7c33d362a6`
 
-Image Id (configuration digest) `sha256:` (pending), after a pull and after
-`docker load` of the release file alike. Python (pending).
+Image Id (configuration digest)
+`sha256:ba05156464f7d01aab30e0dd0241b1333accf72b0ee559d77b102157dd387c18`,
+after a pull and after `docker load` of the release file alike. Python
+3.13.18.
 
 One envelope for the family: the API takes the shape of its sibling,
 vt-proxy, and the shape is written down as docs/ENVELOPE.md. This release
