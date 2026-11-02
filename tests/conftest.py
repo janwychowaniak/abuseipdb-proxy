@@ -100,10 +100,14 @@ def make_response(
     return resp
 
 
+def captured(name: str) -> dict:
+    """The response a capture froze: status, headers and body."""
+    return json.loads((CAPTURES / f"{name}.json").read_text())["response"]
+
+
 def response_from_capture(name: str) -> requests.Response:
-    doc = json.loads((CAPTURES / f"{name}.json").read_text())
-    captured = doc["response"]
-    return make_response(captured["status"], body=captured["body"], headers=captured.get("headers"))
+    capture = captured(name)
+    return make_response(capture["status"], body=capture["body"], headers=capture.get("headers"))
 
 
 class FakeUpstream:
@@ -163,8 +167,9 @@ def client(settings: Settings, fake_upstream: FakeUpstream) -> TestClient:
 
 API_KEY = "test-key-never-printed"
 NO_UPSTREAM = "https://upstream.invalid/api/v2"  # for tests that make no lookup
-LOOKUP = "/check/87.98.154.146"  # the address midscore-default.json answers for
-CAPTURE = json.loads((CAPTURES / "midscore-default.json").read_text())["response"]
+CHECK = "/v1/check"
+LOOKUP = {"artifact": "87.98.154.146"}  # the address midscore-default.json answers for
+CAPTURE = captured("midscore-default")
 # what the client takes from the environment: proxies, and a bundle replacing certifi's
 CLIENT_ENV = (
     "HTTP_PROXY",
@@ -199,13 +204,23 @@ def isolated_client(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(upstream, "_session", requests.Session())
 
 
+type Answer = tuple[int, dict[str, str], bytes]  # status, headers, body
+CAPTURE_ANSWER: Answer = (
+    CAPTURE["status"],
+    {"Content-Type": "application/json"},
+    json.dumps(CAPTURE["body"]).encode(),
+)
+
+
 class _Capture(BaseHTTPRequestHandler):
-    """Answers every GET with the frozen capture, as AbuseIPDB answered it."""
+    """Answers every GET with the server's answer: the frozen capture, as AbuseIPDB
+    answered it, unless a test gives another."""
 
     def do_GET(self) -> None:
-        body = json.dumps(CAPTURE["body"]).encode()
-        self.send_response(CAPTURE["status"])
-        self.send_header("Content-Type", "application/json")
+        status, headers, body = self.server.answer  # type: ignore[attr-defined]
+        self.send_response(status)
+        for name, value in headers.items():
+            self.send_header(name, value)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -215,11 +230,12 @@ class _Capture(BaseHTTPRequestHandler):
 
 
 @contextmanager
-def tls_upstream(leaf: trustme.LeafCert) -> Iterator[str]:
+def tls_upstream(leaf: trustme.LeafCert, answer: Answer = CAPTURE_ANSWER) -> Iterator[str]:
     """An HTTPS upstream on loopback presenting `leaf`; yields its base URL."""
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     leaf.configure_cert(context)
     server = ThreadingHTTPServer(("127.0.0.1", 0), _Capture)
+    server.answer = answer  # type: ignore[attr-defined]
     server.socket = context.wrap_socket(server.socket, server_side=True)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
@@ -321,18 +337,19 @@ def service(
 
 
 def assert_reached(client: TestClient) -> None:
-    response = client.get(LOOKUP)
+    response = client.post(CHECK, json=LOOKUP)
     assert response.status_code == 200
     assert response.json()["verdict"] == {"score": 30, "thresh_gte": True}  # the capture's
 
 
 def assert_refused(client: TestClient) -> str:
-    """The lookup fails on the transport-error path; returns its detail."""
-    response = client.get(LOOKUP)
+    """The lookup fails on the transport-error path; returns the error's message."""
+    response = client.post(CHECK, json=LOOKUP)
     assert response.status_code == 504  # the transport-error path, as for any failed TLS
-    detail = response.json()["detail"]
-    assert detail.startswith("upstream-timeout:")
-    return detail
+    error = response.json()["error"]
+    assert error["code"] == "UPSTREAM_TIMEOUT"
+    assert "upstream" not in error  # no answer came, so no upstream error object
+    return error["message"]
 
 
 def run_entrypoint(cwd: Path, **env: str) -> subprocess.CompletedProcess[str]:

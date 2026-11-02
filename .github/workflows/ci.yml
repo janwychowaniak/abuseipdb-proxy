@@ -27,23 +27,26 @@ jobs:
         run: .github/scripts/archive-image.sh abuseipdb-proxy ci -
       # All three smoke tests: a read-only root filesystem and no tmpfs, since
       # the service writes nothing, with or without CA_FILE and X509_STRICT
-      # (SPEC §8). A dummy key: /health and local validation never reach upstream.
+      # (SPEC §8). A dummy key: /v1/health and local validation never reach upstream.
       - name: Smoke-test read-only, without CA_FILE
         run: |
           docker run -d --name smoke --read-only -e ABUSEIPDB_API_KEY=ci-dummy-key \
             -p 127.0.0.1:8000:8000 abuseipdb-proxy:ci
           for _ in $(seq 1 30); do
-            curl -fsS http://127.0.0.1:8000/health > /dev/null 2>&1 && break
+            curl -fsS http://127.0.0.1:8000/v1/health > /dev/null 2>&1 && break
             sleep 1
           done
-          health=$(curl -fsS http://127.0.0.1:8000/health) || {
-            echo "::error::/health never came up"; docker logs smoke; exit 1; }
+          health=$(curl -fsS http://127.0.0.1:8000/v1/health) || {
+            echo "::error::/v1/health never came up"; docker logs smoke; exit 1; }
           echo "$health"
           grep -q '"status":"ok"' <<< "$health"
           grep -q '"extra_ca":false' <<< "$health"
           grep -q '"x509_strict":true' <<< "$health"
-          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/check/10.0.0.1)
-          test "$code" = 400  # rejected locally (D3), no upstream involved
+          answer=$(curl -s -X POST -H 'Content-Type: application/json' \
+            -d '{"artifact":"10.0.0.1"}' -w '\n%{http_code}' http://127.0.0.1:8000/v1/check)
+          echo "$answer"
+          test "$(tail -n 1 <<< "$answer")" = 422  # rejected locally (D3), no upstream involved
+          grep -q '"code":"INVALID_ARTIFACT"' <<< "$answer"
           docker rm -f smoke
       - name: Smoke-test read-only, with CA_FILE (a CA generated here)
         run: |
@@ -57,11 +60,11 @@ jobs:
             -e ABUSEIPDB_API_KEY=ci-dummy-key -e CA_FILE=/etc/abuseipdb-proxy/ca.pem \
             -v "$RUNNER_TEMP/ca.pem:/etc/abuseipdb-proxy/ca.pem:ro" abuseipdb-proxy:ci
           for _ in $(seq 1 30); do
-            curl -fsS http://127.0.0.1:8001/health > /dev/null 2>&1 && break
+            curl -fsS http://127.0.0.1:8001/v1/health > /dev/null 2>&1 && break
             sleep 1
           done
-          health=$(curl -fsS http://127.0.0.1:8001/health) || {
-            echo "::error::/health never came up"; docker logs smoke-ca; exit 1; }
+          health=$(curl -fsS http://127.0.0.1:8001/v1/health) || {
+            echo "::error::/v1/health never came up"; docker logs smoke-ca; exit 1; }
           echo "$health"
           grep -q '"extra_ca":true' <<< "$health"
           grep -q '"x509_strict":true' <<< "$health"
@@ -77,11 +80,11 @@ jobs:
           docker run -d --name smoke-strict --read-only -p 127.0.0.1:8002:8000 \
             -e ABUSEIPDB_API_KEY=ci-dummy-key -e X509_STRICT=false abuseipdb-proxy:ci
           for _ in $(seq 1 30); do
-            curl -fsS http://127.0.0.1:8002/health > /dev/null 2>&1 && break
+            curl -fsS http://127.0.0.1:8002/v1/health > /dev/null 2>&1 && break
             sleep 1
           done
-          health=$(curl -fsS http://127.0.0.1:8002/health) || {
-            echo "::error::/health never came up"; docker logs smoke-strict; exit 1; }
+          health=$(curl -fsS http://127.0.0.1:8002/v1/health) || {
+            echo "::error::/v1/health never came up"; docker logs smoke-strict; exit 1; }
           echo "$health"
           grep -q '"x509_strict":false' <<< "$health"
           logs=$(docker logs smoke-strict 2>&1)

@@ -14,9 +14,13 @@ class InvalidIPError(ValueError):
 def validate_ip(raw: str) -> IPAddress:
     """Parse, unwrap and gate an IP string; return the address to query upstream.
 
-    D3.1 unparseable -> reject; D3.2 zone-id -> reject; D3.3 v4-mapped ->
-    unwrap; D3.4 must be global and not multicast -> reject with category.
+    D3.1 unparseable -> reject, a network or range first by its "/"; D3.2
+    zone-id -> reject; D3.3 v4-mapped -> unwrap; D3.4 must be global and not
+    multicast -> reject with category.
     """
+    if "/" in raw:
+        # A CIDR typo says what is wrong, as 0.3.0's catch-all route did (SPEC §3).
+        raise InvalidIPError("not a single IP address")
     try:
         ip: IPAddress = ipaddress.ip_address(raw)
     except ValueError:

@@ -1,6 +1,7 @@
 """ABUSEIPDB_BASE_URL (SPEC §4): the prefix up to /api/v2, for tests and mocks."""
 
 import pytest
+from conftest import CHECK, LOOKUP
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
@@ -16,7 +17,7 @@ def settings_with(base_url: str) -> Settings:
 
 def test_the_default_is_the_abuseipdb_api(client, fake_upstream):
     fake_upstream.arm_capture("midscore-default")
-    client.get("/check/87.98.154.146")
+    client.post(CHECK, json=LOOKUP)
     assert fake_upstream.calls[0]["url"] == "https://api.abuseipdb.com/api/v2/check"
 
 
@@ -31,7 +32,7 @@ def test_the_default_is_the_abuseipdb_api(client, fake_upstream):
 )
 def test_the_override_replaces_the_prefix_and_check_is_appended(fake_upstream, base_url, called):
     fake_upstream.arm_capture("midscore-default")
-    TestClient(create_app(settings_with(base_url))).get("/check/87.98.154.146")
+    TestClient(create_app(settings_with(base_url))).post(CHECK, json=LOOKUP)
     assert fake_upstream.calls[0]["url"] == called
 
 

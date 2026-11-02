@@ -42,10 +42,10 @@ ENV PATH="/app/.venv/bin:$PATH"
 USER app
 EXPOSE 8000
 
-# static endpoint, no upstream call or quota spent (SPEC §3: GET /health);
+# static endpoint, no upstream call or quota spent (SPEC §3: GET /v1/health);
 # python-stdlib probe — the slim image ships no curl/wget
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)"]
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/v1/health', timeout=4)"]
 
 # 0.0.0.0 is container-internal only; the localhost-only guarantee lives in
 # the compose/docker-run port mapping 127.0.0.1:...:8000 (SPEC §1).

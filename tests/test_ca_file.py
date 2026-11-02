@@ -264,7 +264,7 @@ def test_a_missing_key_is_reported_before_ca_file(tmp_path):
 
 
 def test_without_ca_file_health_says_false_and_no_line_is_logged(capsys):
-    body = service(NO_UPSTREAM).get("/health").json()
+    body = service(NO_UPSTREAM).get("/v1/health").json()
     assert body == {
         "status": "ok",
         "name": "abuseipdb-proxy",
@@ -276,13 +276,13 @@ def test_without_ca_file_health_says_false_and_no_line_is_logged(capsys):
 
 
 def test_an_empty_ca_file_is_absent(capsys):
-    assert service(NO_UPSTREAM, "").get("/health").json()["extra_ca"] is False
+    assert service(NO_UPSTREAM, "").get("/v1/health").json()["extra_ca"] is False
     assert startup_lines(capsys.readouterr().out) == []
 
 
 def test_with_ca_file_health_says_true_and_one_line_counts_the_certificates(tmp_path, capsys):
     path = pem_file(tmp_path / "ca.pem", trustme.CA().cert_pem, trustme.CA().cert_pem)
-    assert service(NO_UPSTREAM, path).get("/health").json()["extra_ca"] is True
+    assert service(NO_UPSTREAM, path).get("/v1/health").json()["extra_ca"] is True
     [line] = startup_lines(capsys.readouterr().out)
     del line["ts"]
     assert line == {

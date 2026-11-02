@@ -40,10 +40,10 @@ from abuseipdb_proxy.app import create_app
 
 pytestmark = pytest.mark.usefixtures("isolated_client")
 
-REFUSED = "upstream-timeout: upstream unreachable (SSLError)"
+REFUSED = "upstream unreachable (SSLError)"
 HINT = "; TLS: Basic Constraints of CA cert not marked critical, see X509_STRICT"
 HINTED = REFUSED + HINT
-PROXY_REFUSED = "upstream-timeout: upstream unreachable (ProxyError)"
+PROXY_REFUSED = "upstream unreachable (ProxyError)"
 
 
 def non_conforming(ca: trustme.CA) -> trustme.CA:
@@ -113,7 +113,8 @@ def test_the_default_refuses_a_non_conforming_authority_with_a_hint(tmp_path, ca
         assert assert_refused(service(url, pem_file(tmp_path / "ca.pem", ca.cert_pem))) == HINTED
     [line] = log_lines(capsys.readouterr().out, "check")
     assert line["our_status"] == 504
-    assert line["detail"] == HINTED  # the check line carries the same text
+    assert line["code"] == "UPSTREAM_TIMEOUT"
+    assert line["message"] == HINTED  # the check line carries the same text
 
 
 @pytest.mark.loopback
@@ -123,7 +124,7 @@ def test_false_admits_the_non_conforming_authority(tmp_path):
         client = service(url, pem_file(tmp_path / "ca.pem", ca.cert_pem), "false")
         assert_reached(client)
         # loading the bundle into the context at connect time leaves the flag alone
-        assert client.get("/health").json()["x509_strict"] is False
+        assert client.get("/v1/health").json()["x509_strict"] is False
 
 
 @pytest.mark.loopback
@@ -196,8 +197,8 @@ def test_a_refused_connection_keeps_its_message():
     with socket.socket() as probe:  # a loopback port nothing listens on
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
-    detail = assert_refused(service(f"https://127.0.0.1:{port}/api/v2"))
-    assert detail == "upstream-timeout: upstream unreachable (ConnectionError)"
+    message = assert_refused(service(f"https://127.0.0.1:{port}/api/v2"))
+    assert message == "upstream unreachable (ConnectionError)"
 
 
 # --- the setting: refusals, health and the startup line ---------------------------------
@@ -270,7 +271,7 @@ SPELLINGS = [
 
 @pytest.mark.parametrize(("value", "strict"), SPELLINGS, ids=[repr(v) for v, _ in SPELLINGS])
 def test_health_says_what_the_context_carries_and_false_logs_one_warning(value, strict, capsys):
-    body = service(NO_UPSTREAM, x509_strict=value).get("/health").json()
+    body = service(NO_UPSTREAM, x509_strict=value).get("/v1/health").json()
     assert list(body) == ["status", "name", "version", "extra_ca", "x509_strict"]
     assert body["x509_strict"] is strict
     warnings = log_lines(capsys.readouterr().out, "x509_strict_disabled")
@@ -294,7 +295,7 @@ def test_health_reads_the_context_not_the_setting(monkeypatch):
     # with a context builder that ignores the setting, health follows the context
     built = tls.upstream_context
     monkeypatch.setattr(tls, "upstream_context", lambda pem, strict: built(pem, True))
-    body = service(NO_UPSTREAM, x509_strict="false").get("/health").json()
+    body = service(NO_UPSTREAM, x509_strict="false").get("/v1/health").json()
     assert body["x509_strict"] is True
 
 
@@ -341,11 +342,11 @@ def test_an_error_that_is_no_failed_verification_gets_none():
     assert tls.strict_hint(refused) == ""
 
 
-@pytest.mark.parametrize(("value", "detail"), [("true", HINTED), ("false", REFUSED)])
-def test_only_a_context_with_the_flag_gives_the_hint(fake_upstream, value, detail):
+@pytest.mark.parametrize(("value", "message"), [("true", HINTED), ("false", REFUSED)])
+def test_only_a_context_with_the_flag_gives_the_hint(fake_upstream, value, message):
     fake_upstream.arm_exc(failed_verification(89))
     client = TestClient(create_app(settings_for(NO_UPSTREAM, x509_strict=value)))
-    assert assert_refused(client) == detail
+    assert assert_refused(client) == message
 
 
 def caught(base_url: str, ca_file: str) -> requests.exceptions.RequestException:

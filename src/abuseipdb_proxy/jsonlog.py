@@ -40,6 +40,11 @@ class JsonFormatter(logging.Formatter):
             "message": record.getMessage(),
         }
         payload.update({k: v for k, v in record.__dict__.items() if k not in _RESERVED})
+        # One extra key, `fields`, is flattened into the line, so that it can carry a
+        # name a LogRecord reserves, such as the caller's `msg` (SPEC §7).
+        fields = payload.pop("fields", None)
+        if isinstance(fields, dict):
+            payload.update(fields)
         if record.exc_info:
             payload["exc_info"] = self.formatException(record.exc_info)
         return json.dumps(payload, default=str)
